@@ -66,8 +66,6 @@
   }
 
   // ---- girdi -----------------------------------------------------------
-  let touchX = 0, touchY = 0, touchId = null, swiped = false;
-
   function jump(){ p.buffer = BUFFER; }
   function turn(d){
     if (p.dir === d) return;
@@ -75,22 +73,13 @@
     if (p.ground) puff(p.x, p.y, 4);
   }
 
+  // Baktığın yöne dokun = zıpla. Ters tarafa dokun = geri dön.
   cv.addEventListener('pointerdown', e => {
     e.preventDefault();
     if (over) { reset(); return; }
-    touchId = e.pointerId; touchX = e.clientX; touchY = e.clientY; swiped = false;
-  });
-  cv.addEventListener('pointermove', e => {
-    if (e.pointerId !== touchId || swiped) return;
-    const dx = e.clientX - touchX;
-    if (Math.abs(dx) > 26 && Math.abs(dx) > Math.abs(e.clientY - touchY)) {
-      turn(dx > 0 ? 1 : -1); swiped = true;
-    }
-  });
-  cv.addEventListener('pointerup', e => {
-    if (e.pointerId !== touchId) return;
-    if (!swiped) jump();
-    touchId = null;
+    const r = cv.getBoundingClientRect();
+    const side = (e.clientX - r.left) < r.width/2 ? -1 : 1;
+    if (side === p.dir) jump(); else turn(side);
   });
   addEventListener('keydown', e => {
     if (e.repeat) return;
@@ -238,6 +227,17 @@
     ctx.fillRect(p.x - 5 + p.dir*4, py - h + 9, 3, 4);
     ctx.fillRect(p.x + 2 + p.dir*4, py - h + 9, 3, 4);
 
+    // dokunma bölgeleri — hangi yarı ne yapıyor, yön değişince yer değiştirir
+    const zw = (W-2*WALL-36)/2, zy = H-62;
+    ctx.fillStyle = 'rgba(255,255,255,.05)';
+    round(WALL+14, zy-16, zw, 22, 6); ctx.fill();
+    round(W/2+4, zy-16, zw, 22, 6); ctx.fill();
+    ctx.font = '600 11px ui-monospace,monospace'; ctx.textAlign = 'center';
+    ctx.fillStyle = p.dir === -1 ? C.amber : C.dim;
+    ctx.fillText(p.dir === -1 ? 'ZIPLA' : 'DÖN', WALL+14+zw/2, zy);
+    ctx.fillStyle = p.dir === 1 ? C.amber : C.dim;
+    ctx.fillText(p.dir === 1 ? 'ZIPLA' : 'DÖN', W/2+4+zw/2, zy);
+
     // hız göstergesi — ne zaman zıplayacağını söyleyen tek ipucu
     const sp = Math.abs(p.vx)/MAX_VX;
     ctx.fillStyle = 'rgba(255,255,255,.10)';
@@ -278,8 +278,9 @@
       ctx.globalAlpha = Math.max(0, 1 - t/6);
       ctx.textAlign = 'center'; ctx.fillStyle = C.dim;
       ctx.font = '600 14px ui-monospace,monospace';
-      ctx.fillText('dokun = zıpla · kaydır = yön değiştir', W/2, H/2);
-      ctx.fillText('hızlıyken zıpla, daha yükseğe çıkarsın', W/2, H/2 + 24);
+      ctx.fillText('baktığın yöne dokun = zıpla', W/2, H/2);
+      ctx.fillText('ters tarafa dokun = geri dön', W/2, H/2 + 24);
+      ctx.fillText('hızlıyken zıpla, daha yükseğe çıkarsın', W/2, H/2 + 48);
       ctx.globalAlpha = 1;
     }
     ctx.restore();
