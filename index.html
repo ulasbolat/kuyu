@@ -1,55 +1,63 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <style>
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  html,body{height:100%;background:#0B0917;overflow:hidden;
+  html,body{height:100%;overflow:hidden;background:#0B0917;
     font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
-    -webkit-user-select:none;user-select:none;touch-action:none}
-  #wrap{height:100%;display:flex;align-items:center;justify-content:center}
-  canvas{display:block;max-width:100%;max-height:100%;aspect-ratio:450/800;
-    border-radius:14px;box-shadow:0 0 60px rgba(255,180,84,.07)}
+    -webkit-user-select:none;user-select:none;touch-action:none;overscroll-behavior:none}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+  #st,#sb{position:fixed;left:0;width:0}
+  #st{top:0;height:env(safe-area-inset-top,0px)}
+  #sb{bottom:0;height:env(safe-area-inset-bottom,0px)}
 </style>
-<div id="wrap"><canvas id="c"></canvas></div>
+<div id="st"></div><div id="sb"></div>
+<canvas id="c"></canvas>
 <script>
 (() => {
   // ---- sabitler --------------------------------------------------------
-  const W = 450, H = 800;
+  const W = 450;            // mantıksal genişlik sabit, yükseklik cihaza göre
+  let H = 800, safeTop = 0, safeBot = 0;
   const WALL = 16;
   const FLOOR_H = 88;
   const G = 2300;
-  const MAX_VX = 520;       // üst koşu hızı
-  const ACC = 1350;         // tam eğimde ivme
-  const AIR = 0.55;         // havadaki yön kontrolü
-  const DRAG_GROUND = 0.04; // yerde girdi yokken yavaşlama (saniyede kalan oran)
-  const JUMP_BASE = 730;    // duran zıplama
-  const JUMP_K = 1.25;      // hız → zıplama katkısı
-  const WALL_KEEP = 0.55;   // duvara toslayınca korunan hız
-  const TILT_DEAD = 3.5;    // derece, ölü bölge
-  const TILT_FULL = 20;     // derece, tam gaz
-  const COYOTE = 0.09, BUFFER = 0.13, CHAIN_WIN = 0.45;
+  const JUMP_VY = 1085;     // sabit zıplama gücü — yaklaşık 2,9 kat
+  const SPD_MIN = 250;      // başlangıç koşu hızı
+  const SPD_MAX = 545;      // yükseldikçe ulaşılan tavan
+  const SPD_RAMP = 2.4;     // kat başına hız artışı
+  const TURN = 9;           // yön tuşuna tepki keskinliği
+  const SLOW = 0.14;        // tuş bırakınca saniyede kalan hız oranı
+  const WALL_KEEP = 0.5;
+  const CHAIN_WIN = 0.6;    // zinciri koruma penceresi (sn)
+
+  const PRAISE = ['GÜZEL','HARİKA','MÜKEMMEL','İNANILMAZ','EFSANE','DURDURULAMAZ'];
 
   const C = {
     bgTop:'#0B0917', bgBot:'#221B44', wall:'#181330', wallLine:'#241C48',
     stone:'#3C3563', stoneTop:'#6C61A6', mark:'#8A7FD1',
-    amber:'#FFB454', text:'#EDE9FF', dim:'#6E6494'
+    amber:'#FFB454', hot:'#FF7A59', text:'#EDE9FF', dim:'#6E6494'
   };
 
   const cv = document.getElementById('c'), ctx = cv.getContext('2d');
-  function resize(){
-    const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
-    cv.width = W*dpr; cv.height = H*dpr;
-    ctx.setTransform(dpr,0,0,dpr,0,0);
-  }
-  resize(); addEventListener('resize', resize);
+  const st = document.getElementById('st'), sb = document.getElementById('sb');
 
-  let p, plats, camY, rise, score, best=0, maxFloor, over, shake, pops, dust, t, side;
+  function resize(){
+    const cw = cv.clientWidth || window.innerWidth;
+    const ch = cv.clientHeight || window.innerHeight;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    cv.width = cw*dpr; cv.height = ch*dpr;
+    const s = cw*dpr/W;                       // 1 mantıksal birim = s fiziksel piksel
+    ctx.setTransform(s,0,0,s,0,0);
+    H = ch * W / cw;                          // yükseklik ekran oranından türetiliyor
+    safeTop = st.getBoundingClientRect().height * W / cw;
+    safeBot = sb.getBoundingClientRect().height * W / cw;
+  }
+
+  let p, plats, camY, rise, score, best=0, maxFloor, over, shake, pops, dust, t, side, heat;
 
   function reset(){
-    p = { x:W/2, y:0, vx:0, vy:0, dir:1, ground:true, coyote:0, buffer:0,
-          takeoff:0, lastLand:0, chain:0, squash:1 };
+    p = { x:W/2, y:0, vx:0, vy:0, dir:1, takeoff:0, lastLand:0, chain:0, squash:1 };
     plats = [{ x:WALL, y:0, w:W-2*WALL, floor:0 }];
     camY = -0.62*H; rise = 0; score = 0; maxFloor = 0; over = false;
-    shake = 0; pops = []; dust = []; t = 0; side = 1;
-    baseGamma = null;
+    shake = 0; pops = []; dust = []; t = 0; side = 1; heat = 0;
     grow();
   }
 
@@ -58,7 +66,7 @@
     while (top.y > camY - 400) {
       const f = top.floor + 1;
       const big = f % 10 === 0;
-      let w = big ? W-2*WALL-40 : Math.max(72, 200 - f*1.0) + Math.random()*36;
+      let w = big ? W-2*WALL-40 : Math.max(74, 200 - f*1.0) + Math.random()*36;
       w = Math.min(w, W-2*WALL-24);
       const span = W-2*WALL-24-w;
       let x;
@@ -71,40 +79,32 @@
     while (plats.length && plats[0].y - camY > H + 200) plats.shift();
   }
 
-  // ---- girdi -----------------------------------------------------------
-  // Yön  : telefonu sağa/sola yatır (sensör yoksa köşe tuşları)
-  // Zıpla: ekranın herhangi bir yerine dokun
-  let tilt = 0, baseGamma = null, tiltSeen = 0, keyDir = 0;
+  // ---- girdi: sadece sağ / sol ------------------------------------------
+  let keyDir = 0;
   const holds = new Map();
 
-  addEventListener('deviceorientation', e => {
-    if (e.gamma == null) return;
-    tiltSeen = performance.now();
-    if (baseGamma === null) baseGamma = e.gamma;          // eldeki doğal açıyı sıfır kabul et
-    const d = e.gamma - baseGamma;
-    const mag = Math.max(0, Math.abs(d) - TILT_DEAD) / (TILT_FULL - TILT_DEAD);
-    tilt = Math.sign(d) * Math.min(1, mag);
-  });
-  const tiltOn = () => performance.now() - tiltSeen < 1500;
-
-  function btnAt(cx, cy){
+  function btnRects(){
+    const size = 118, y = H - safeBot - 150;
+    return [{ d:-1, x:26, y, w:size, h:size }, { d:1, x:W-26-size, y, w:size, h:size }];
+  }
+  function hit(cx, cy){
     const r = cv.getBoundingClientRect();
     const x = (cx - r.left) / r.width * W, y = (cy - r.top) / r.height * H;
-    if (y < H-190) return 0;
-    if (x < 150) return -1;
-    if (x > W-150) return 1;
+    for (const b of btnRects())
+      if (x > b.x-18 && x < b.x+b.w+18 && y > b.y-18 && y < b.y+b.h+18) return b.d;
     return 0;
   }
 
   cv.addEventListener('pointerdown', e => {
     e.preventDefault();
     if (over) { reset(); return; }
-    if (typeof DeviceOrientationEvent !== 'undefined' &&
-        typeof DeviceOrientationEvent.requestPermission === 'function' && !tiltSeen) {
-      DeviceOrientationEvent.requestPermission().catch(()=>{});
-    }
-    const b = tiltOn() ? 0 : btnAt(e.clientX, e.clientY);
-    if (b) holds.set(e.pointerId, b); else p.buffer = BUFFER;
+    const d = hit(e.clientX, e.clientY);
+    if (d) { holds.set(e.pointerId, d); cv.setPointerCapture(e.pointerId); }
+  });
+  cv.addEventListener('pointermove', e => {
+    if (!holds.has(e.pointerId)) return;
+    const d = hit(e.clientX, e.clientY);
+    if (d) holds.set(e.pointerId, d); else holds.delete(e.pointerId);
   });
   const release = e => holds.delete(e.pointerId);
   cv.addEventListener('pointerup', release);
@@ -113,9 +113,7 @@
   addEventListener('keydown', e => {
     if (e.code === 'ArrowLeft') keyDir = -1;
     if (e.code === 'ArrowRight') keyDir = 1;
-    if ((e.code === 'Space' || e.code === 'ArrowUp') && !e.repeat) {
-      e.preventDefault(); over ? reset() : (p.buffer = BUFFER);
-    }
+    if (e.code === 'Space' && over) reset();
   });
   addEventListener('keyup', e => {
     if (e.code === 'ArrowLeft' && keyDir === -1) keyDir = 0;
@@ -124,7 +122,6 @@
 
   function inputDir(){
     if (keyDir) return keyDir;
-    if (tiltOn()) return tilt;
     let d = 0; for (const v of holds.values()) d += v;
     return Math.max(-1, Math.min(1, d));
   }
@@ -132,31 +129,18 @@
   function puff(x,y,n,sp){
     for (let i=0;i<n;i++) dust.push({x,y,vx:(Math.random()-.5)*(sp||140),vy:-Math.random()*90,life:.4});
   }
-  function pop(x,y,txt){ pops.push({x,y,txt,life:.85}); }
 
   // ---- güncelleme ------------------------------------------------------
   function step(dt){
     t += dt;
     if (over) { decay(dt); return; }
 
-    p.buffer = Math.max(0, p.buffer - dt);
-    p.coyote = p.ground ? COYOTE : Math.max(0, p.coyote - dt);
+    heat = Math.max(0, heat - dt*0.40);          // kombo bırakınca ısı soğur
 
+    const spd = curSpeed();                      // hızı oyun belirliyor, sen değil
     const inp = inputDir();
-    if (inp !== 0) {
-      p.vx += inp * ACC * (p.ground ? 1 : AIR) * dt;
-      p.dir = inp > 0 ? 1 : -1;
-    } else if (p.ground) {
-      p.vx *= Math.pow(DRAG_GROUND, dt);      // bırakırsan hız erir, zıplaman alçalır
-    }
-    p.vx = Math.max(-MAX_VX, Math.min(MAX_VX, p.vx));
-
-    if (p.buffer > 0 && p.coyote > 0) {
-      p.vy = -(JUMP_BASE + JUMP_K * Math.abs(p.vx));
-      p.ground = false; p.coyote = 0; p.buffer = 0;
-      p.takeoff = curFloor(); p.squash = 1.35;
-      puff(p.x, p.y, 5);
-    }
+    if (inp !== 0) { p.vx += (inp*spd - p.vx) * Math.min(1, dt*TURN); p.dir = inp; }
+    else p.vx *= Math.pow(SLOW, dt);
 
     p.vy += G * dt;
     p.x += p.vx * dt;
@@ -172,22 +156,31 @@
       shake = Math.max(shake, Math.abs(p.vx)/110); puff(p.x, p.y-16, 4, 60);
     }
 
-    p.ground = false;
+    // otomatik zıplama: her inişte kendiliğinden sekiyor
     if (p.vy > 0) {
       for (const q of plats) {
         if (prevY <= q.y + 1 && p.y >= q.y && p.x + 11 > q.x && p.x - 11 < q.x + q.w) {
-          p.y = q.y; p.vy = 0; p.ground = true; p.squash = 0.75;
-          land(q.floor); break;
+          p.y = q.y;
+          land(q.floor);
+          p.vy = -JUMP_VY;
+          p.takeoff = q.floor;
+          p.squash = 0.72;
+          break;
         }
       }
     }
 
     camY = Math.min(camY, p.y - 0.62*H);
-    if (maxFloor >= 5) { rise = Math.min(330, 30 + maxFloor*1.8); camY -= rise * dt; }
+    if (maxFloor >= 5) { rise = Math.min(340, 30 + maxFloor*1.8) * (1 + heat*0.25); camY -= rise * dt; }
     grow();
     if (p.y - camY > H + 30) { over = true; shake = 6; }
 
     decay(dt);
+  }
+
+  // hız kata ve kombo ısısına bağlı; oyuncunun doğrudan kontrolünde değil
+  function curSpeed(){
+    return Math.min(SPD_MAX, SPD_MIN + maxFloor*SPD_RAMP) * (1 + heat*0.35);
   }
 
   function decay(dt){
@@ -195,23 +188,25 @@
     shake *= Math.pow(0.001, dt);
     for (const d of dust) { d.life -= dt; d.x += d.vx*dt; d.y += d.vy*dt; d.vy += 400*dt; }
     dust = dust.filter(d => d.life > 0);
-    for (const q of pops) { q.life -= dt; q.y -= 44*dt; }
+    for (const q of pops) { q.life -= dt; q.y -= 26*dt; }
     pops = pops.filter(q => q.life > 0);
   }
-
-  function curFloor(){ return Math.round(-p.y / FLOOR_H); }
 
   function land(f){
     const gain = f - p.takeoff;
     if (f > maxFloor) maxFloor = f;
-    puff(p.x, p.y, 3);
+    puff(p.x, p.y, gain >= 2 ? 7 : 3, gain >= 2 ? 200 : 140);
+
     if (gain >= 2) {
       p.chain = (t - p.lastLand < CHAIN_WIN) ? p.chain + 1 : 1;
+      heat = Math.min(1, heat + 0.22);
       score += gain * gain * 6 * p.chain;
-      if (p.chain > 1) pop(p.x, p.y - 46, 'x' + p.chain);
+      const word = PRAISE[Math.min(PRAISE.length-1, gain - 2 + Math.floor(p.chain/3))];
+      pops.push({ x:W/2, y:p.y - 120, txt:word, sub:p.chain > 1 ? 'x'+p.chain : '', life:1 });
+      shake = Math.max(shake, 1.5 + gain*0.4);
     } else {
-      score += Math.max(0, gain);
       if (t - p.lastLand >= CHAIN_WIN) p.chain = 0;
+      score += Math.max(0, gain);
     }
     p.lastLand = t;
     if (score > best) best = score;
@@ -222,7 +217,8 @@
     ctx.save(); ctx.translate((Math.random()-.5)*shake, (Math.random()-.5)*shake);
 
     const g = ctx.createLinearGradient(0,0,0,H);
-    g.addColorStop(0, C.bgTop); g.addColorStop(1, C.bgBot);
+    g.addColorStop(0, C.bgTop);
+    g.addColorStop(1, heat > 0.05 ? mix(C.bgBot, '#4A2140', heat) : C.bgBot);
     ctx.fillStyle = g; ctx.fillRect(-10,-10,W+20,H+20);
 
     ctx.fillStyle = C.wall;
@@ -253,44 +249,56 @@
 
     const py = p.y - camY, sq = p.squash, w = 24/sq, h = 34*sq;
     ctx.save();
-    ctx.shadowColor = C.amber; ctx.shadowBlur = 26;
-    ctx.fillStyle = C.amber; round(p.x - w/2, py - h, w, h, 7); ctx.fill();
+    ctx.shadowColor = heat > 0.4 ? C.hot : C.amber; ctx.shadowBlur = 24 + heat*26;
+    ctx.fillStyle = heat > 0.4 ? mix(C.amber, C.hot, (heat-0.4)/0.6) : C.amber;
+    round(p.x - w/2, py - h, w, h, 7); ctx.fill();
     ctx.restore();
     ctx.fillStyle = '#3A2408';
     ctx.fillRect(p.x - 5 + p.dir*4, py - h + 9, 3, 4);
     ctx.fillRect(p.x + 2 + p.dir*4, py - h + 9, 3, 4);
 
-    // sensör yoksa köşe tuşları
-    if (!tiltOn() && !keyDir) {
-      ctx.fillStyle = 'rgba(255,255,255,.06)';
-      round(24, H-160, 110, 110, 22); ctx.fill();
-      round(W-134, H-160, 110, 110, 22); ctx.fill();
-      ctx.fillStyle = C.dim; ctx.font = '700 26px ui-monospace,monospace'; ctx.textAlign = 'center';
-      ctx.fillText('◀', 79, H-95); ctx.fillText('▶', W-79, H-95);
-    }
-
-    const sp = Math.abs(p.vx)/MAX_VX;
-    ctx.fillStyle = 'rgba(255,255,255,.10)';
-    round(WALL+14, H-40, W-2*WALL-28, 8, 4); ctx.fill();
-    ctx.fillStyle = C.amber;
-    round(WALL+14, H-40, (W-2*WALL-28)*sp, 8, 4); ctx.fill();
-
-    ctx.textAlign = 'left'; ctx.fillStyle = C.text;
-    ctx.font = '700 30px ui-monospace,monospace'; ctx.fillText(score, WALL+16, 52);
-    ctx.font = '600 12px ui-monospace,monospace'; ctx.fillStyle = C.dim;
-    ctx.fillText('PUAN', WALL+16, 68);
-    ctx.textAlign = 'right'; ctx.fillStyle = C.text;
-    ctx.font = '700 30px ui-monospace,monospace'; ctx.fillText(maxFloor, W-WALL-16, 52);
-    ctx.font = '600 12px ui-monospace,monospace'; ctx.fillStyle = C.dim;
-    ctx.fillText('KAT · REKOR ' + best, W-WALL-16, 68);
-
+    // övgü yazıları
     for (const q of pops) {
-      ctx.globalAlpha = Math.min(1, q.life*1.6);
-      ctx.fillStyle = C.amber; ctx.textAlign = 'center';
-      ctx.font = '700 22px ui-monospace,monospace';
-      ctx.fillText(q.txt, q.x, q.y - camY);
+      const k = 1 - q.life, sc = 1 + Math.max(0, 0.5 - k*3);
+      ctx.globalAlpha = Math.min(1, q.life*2.2);
+      ctx.save(); ctx.translate(q.x, q.y - camY); ctx.scale(sc, sc);
+      ctx.textAlign = 'center'; ctx.fillStyle = C.hot;
+      ctx.font = '800 34px ui-monospace,monospace';
+      ctx.fillText(q.txt, 0, 0);
+      if (q.sub) { ctx.fillStyle = C.amber; ctx.font = '800 22px ui-monospace,monospace';
+        ctx.fillText(q.sub, 0, 28); }
+      ctx.restore();
     }
     ctx.globalAlpha = 1;
+
+    // yön tuşları
+    for (const b of btnRects()) {
+      const on = inputDir() === b.d;
+      ctx.fillStyle = on ? 'rgba(255,180,84,.20)' : 'rgba(255,255,255,.07)';
+      round(b.x, b.y, b.w, b.h, 26); ctx.fill();
+      ctx.fillStyle = on ? C.amber : C.dim;
+      ctx.font = '700 30px ui-monospace,monospace'; ctx.textAlign = 'center';
+      ctx.fillText(b.d < 0 ? '◀' : '▶', b.x + b.w/2, b.y + b.h/2 + 11);
+    }
+
+    // ısı çubuğu — kombo zinciri sürdükçe dolar, oyun hızlanır
+    const barY = H - safeBot - 22;
+    ctx.fillStyle = 'rgba(255,255,255,.10)';
+    round(WALL+14, barY, W-2*WALL-28, 8, 4); ctx.fill();
+    ctx.fillStyle = heat > 0.4 ? C.hot : C.amber;
+    round(WALL+14, barY, (W-2*WALL-28)*heat, 8, 4); ctx.fill();
+    ctx.fillStyle = C.dim; ctx.font = '600 10px ui-monospace,monospace';
+    ctx.textAlign = 'left'; ctx.fillText('ISI', WALL+14, barY - 6);
+
+    const hy = safeTop + 46;
+    ctx.textAlign = 'left'; ctx.fillStyle = C.text;
+    ctx.font = '700 30px ui-monospace,monospace'; ctx.fillText(score, WALL+16, hy);
+    ctx.font = '600 12px ui-monospace,monospace'; ctx.fillStyle = C.dim;
+    ctx.fillText('PUAN', WALL+16, hy+16);
+    ctx.textAlign = 'right'; ctx.fillStyle = C.text;
+    ctx.font = '700 30px ui-monospace,monospace'; ctx.fillText(maxFloor, W-WALL-16, hy);
+    ctx.font = '600 12px ui-monospace,monospace'; ctx.fillStyle = C.dim;
+    ctx.fillText('KAT · REKOR ' + best, W-WALL-16, hy+16);
 
     if (over) {
       ctx.fillStyle = 'rgba(11,9,23,.86)'; ctx.fillRect(0,0,W,H);
@@ -301,16 +309,22 @@
       ctx.fillText(maxFloor + '. kat · ' + score + ' puan', W/2, H/2 - 8);
       ctx.fillStyle = C.amber; ctx.font = '700 16px ui-monospace,monospace';
       ctx.fillText('yeniden başlamak için dokun', W/2, H/2 + 40);
-    } else if (maxFloor === 0 && t < 7) {
-      ctx.globalAlpha = Math.max(0, 1 - t/7);
+    } else if (maxFloor === 0 && t < 6) {
+      ctx.globalAlpha = Math.max(0, 1 - t/6);
       ctx.textAlign = 'center'; ctx.fillStyle = C.dim;
       ctx.font = '600 14px ui-monospace,monospace';
-      ctx.fillText('telefonu sağa sola yatır = koş', W/2, H/2);
-      ctx.fillText('ekrana dokun = zıpla', W/2, H/2 + 24);
-      ctx.fillText('hız çubuğu doluyken zıpla, yükseğe çıkarsın', W/2, H/2 + 48);
+      ctx.fillText('tek işin sağ ve sol', W/2, H*0.42);
+      ctx.fillText('zıplamayı da hızı da oyun ayarlıyor', W/2, H*0.42 + 24);
+      ctx.fillText('hep bir üstteki basamağa yetiş', W/2, H*0.42 + 48);
       ctx.globalAlpha = 1;
     }
     ctx.restore();
+  }
+
+  function mix(a, b, k){
+    const pa = [1,3,5].map(i => parseInt(a.substr(i,2),16));
+    const pb = [1,3,5].map(i => parseInt(b.substr(i,2),16));
+    return 'rgb(' + pa.map((v,i) => Math.round(v + (pb[i]-v)*k)).join(',') + ')';
   }
 
   function round(x,y,w,h,r){
@@ -325,6 +339,8 @@
     step(dt); draw();
     requestAnimationFrame(loop);
   }
+  resize(); addEventListener('resize', resize);
+  addEventListener('orientationchange', () => setTimeout(resize, 120));
   reset(); requestAnimationFrame(loop);
 })();
 </script>
