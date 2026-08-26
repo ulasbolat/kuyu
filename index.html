@@ -12,23 +12,25 @@
 <script>
 (() => {
   // ---- sabitler --------------------------------------------------------
-  const W = 450, H = 800;          // mantıksal çözünürlük
-  const WALL = 16;                 // duvar kalınlığı
-  const FLOOR_H = 88;              // katlar arası dikey mesafe
-  const G = 2050;                  // yerçekimi px/s²
-  const MAX_VX = 430;              // maksimum koşu hızı
-  const ACC = 980;                 // yerdeki ivme
-  const AIR = 0.38;                // havadaki ivme çarpanı
-  const JUMP_BASE = 690;           // duran zıplama
-  const JUMP_K = 1.15;             // hız → zıplama katkısı
-  const WALL_KEEP = 0.93;          // duvara çarpınca korunan hız
-  const TURN_KEEP = 0.45;          // elle dönüşte korunan hız
-  const COYOTE = 0.09, BUFFER = 0.13, CHAIN_WIN = 0.42;
+  const W = 450, H = 800;
+  const WALL = 16;
+  const FLOOR_H = 88;
+  const G = 2300;
+  const MAX_VX = 520;
+  const ACC = 1250;
+  const AIR = 0.62;
+  const JUMP_BASE = 730;
+  const JUMP_K = 1.25;
+  const WALL_KEEP = 1.00;   // duvardan sekerken hiç hız kaybı yok
+  const LAND_LOSS = 0.95;   // normal inişte küçük hız kaybı
+  const DIVE_GAIN = 1.20;   // dalışla inince hız çarpanı
+  const DIVE_VY = 1250;
+  const COYOTE = 0.09, BUFFER = 0.13, CHAIN_WIN = 0.45;
 
   const C = {
     bgTop:'#0B0917', bgBot:'#221B44', wall:'#181330', wallLine:'#241C48',
     stone:'#3C3563', stoneTop:'#6C61A6', mark:'#8A7FD1',
-    amber:'#FFB454', mint:'#6FE3C0', text:'#EDE9FF', dim:'#6E6494'
+    amber:'#FFB454', text:'#EDE9FF', dim:'#6E6494'
   };
 
   // ---- kurulum ---------------------------------------------------------
@@ -40,59 +42,57 @@
   }
   resize(); addEventListener('resize', resize);
 
-  let p, plats, camY, rise, score, best=0, maxFloor, over, shake, pops, dust, t;
+  let p, plats, camY, rise, score, best=0, maxFloor, over, shake, pops, dust, t, side;
 
   function reset(){
-    p = { x:W/2, y:0, vx:0, vy:0, dir:1, ground:true, coyote:0, buffer:0,
-          takeoff:0, lastLand:0, chain:0, squash:1 };
+    p = { x:W/2, y:0, vx:240, vy:0, dir:1, ground:true, coyote:0, buffer:0,
+          dive:false, takeoff:0, lastLand:0, chain:0, squash:1 };
     plats = [{ x:WALL, y:0, w:W-2*WALL, floor:0 }];
     camY = -0.62*H; rise = 0; score = 0; maxFloor = 0; over = false;
-    shake = 0; pops = []; dust = []; t = 0;
+    shake = 0; pops = []; dust = []; t = 0; side = 1;
     grow();
   }
 
+  // platformlar dönüşümlü olarak sağa-sola yerleşir; zikzak rota her zaman mevcut
   function grow(){
     let top = plats[plats.length-1];
     while (top.y > camY - 400) {
       const f = top.floor + 1;
       const big = f % 10 === 0;
-      let w = big ? W-2*WALL-40 : Math.max(66, 210 - f*1.15) + Math.random()*40;
+      let w = big ? W-2*WALL-40 : Math.max(72, 200 - f*1.0) + Math.random()*36;
       w = Math.min(w, W-2*WALL-24);
-      const x = WALL + 12 + Math.random()*(W-2*WALL-24-w);
+      const span = W-2*WALL-24-w;
+      let x;
+      if (big) { x = WALL+12+span/2; }
+      else {
+        side = -side;
+        x = WALL + 12 + (side > 0 ? span*(0.5+Math.random()*0.5) : span*Math.random()*0.5);
+      }
       plats.push({ x, y:-f*FLOOR_H, w, floor:f });
       top = plats[plats.length-1];
     }
     while (plats.length && plats[0].y - camY > H + 200) plats.shift();
   }
 
-  // ---- girdi -----------------------------------------------------------
-  function jump(){ p.buffer = BUFFER; }
-  function turn(d){
-    if (p.dir === d) return;
-    p.dir = d; p.vx *= -TURN_KEEP;
-    if (p.ground) puff(p.x, p.y, 4);
-  }
-
-  // Baktığın yöne dokun = zıpla. Ters tarafa dokun = geri dön.
-  cv.addEventListener('pointerdown', e => {
-    e.preventDefault();
+  // ---- girdi: tek parmak, tek kural ------------------------------------
+  // Yerdeyken dokun  = zıpla
+  // Havadayken dokun = dalış (hızlı in, hızını koru)
+  function tap(){
     if (over) { reset(); return; }
-    const r = cv.getBoundingClientRect();
-    const side = (e.clientX - r.left) < r.width/2 ? -1 : 1;
-    if (side === p.dir) jump(); else turn(side);
-  });
+    if (p.ground || p.coyote > 0) p.buffer = BUFFER;
+    else if (!p.dive && p.vy > -260) { p.dive = true; p.vy = DIVE_VY; p.squash = 1.4; }
+  }
+  cv.addEventListener('pointerdown', e => { e.preventDefault(); tap(); });
   addEventListener('keydown', e => {
     if (e.repeat) return;
-    if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); over ? reset() : jump(); }
-    if (e.code === 'ArrowLeft')  turn(-1);
-    if (e.code === 'ArrowRight') turn(1);
+    if (e.code === 'Space' || e.code === 'ArrowDown' || e.code === 'ArrowUp') { e.preventDefault(); tap(); }
   });
 
   // ---- efektler --------------------------------------------------------
-  function puff(x,y,n){
-    for (let i=0;i<n;i++) dust.push({x,y,vx:(Math.random()-.5)*140,vy:-Math.random()*90,life:.4});
+  function puff(x,y,n,sp){
+    for (let i=0;i<n;i++) dust.push({x,y,vx:(Math.random()-.5)*(sp||140),vy:-Math.random()*90,life:.4});
   }
-  function pop(x,y,txt,col){ pops.push({x,y,txt,col,life:.9}); }
+  function pop(x,y,txt){ pops.push({x,y,txt,life:.85}); }
 
   // ---- güncelleme ------------------------------------------------------
   function step(dt){
@@ -102,14 +102,13 @@
     p.buffer = Math.max(0, p.buffer - dt);
     p.coyote = p.ground ? COYOTE : Math.max(0, p.coyote - dt);
 
-    // otomatik koşu
+    // otomatik koşu — yön oyuncunun derdi değil
     p.vx += p.dir * ACC * (p.ground ? 1 : AIR) * dt;
     p.vx = Math.max(-MAX_VX, Math.min(MAX_VX, p.vx));
 
-    // zıplama: yükseklik tamamen hıza bağlı
     if (p.buffer > 0 && p.coyote > 0) {
       p.vy = -(JUMP_BASE + JUMP_K * Math.abs(p.vx));
-      p.ground = false; p.coyote = 0; p.buffer = 0;
+      p.ground = false; p.coyote = 0; p.buffer = 0; p.dive = false;
       p.takeoff = curFloor();
       p.squash = 1.35;
       puff(p.x, p.y, 5);
@@ -120,25 +119,29 @@
     const prevY = p.y;
     p.y += p.vy * dt;
 
-    // duvar seken
-    if (p.x - 12 < WALL) { p.x = WALL+12; p.vx = Math.abs(p.vx)*WALL_KEEP; p.dir = 1; shake = Math.max(shake, Math.abs(p.vx)/90); }
-    if (p.x + 12 > W-WALL) { p.x = W-WALL-12; p.vx = -Math.abs(p.vx)*WALL_KEEP; p.dir = -1; shake = Math.max(shake, Math.abs(p.vx)/90); }
+    // duvardan sekme — yön değişimi buradan geliyor, hız neredeyse hiç düşmüyor
+    if (p.x - 12 < WALL) {
+      p.x = WALL+12; p.vx = Math.abs(p.vx)*WALL_KEEP; p.dir = 1;
+      shake = Math.max(shake, Math.abs(p.vx)/80); puff(p.x, p.y-16, 4, 60);
+    }
+    if (p.x + 12 > W-WALL) {
+      p.x = W-WALL-12; p.vx = -Math.abs(p.vx)*WALL_KEEP; p.dir = -1;
+      shake = Math.max(shake, Math.abs(p.vx)/80); puff(p.x, p.y-16, 4, 60);
+    }
 
-    // iniş
     p.ground = false;
     if (p.vy > 0) {
       for (const q of plats) {
         if (prevY <= q.y + 1 && p.y >= q.y && p.x + 11 > q.x && p.x - 11 < q.x + q.w) {
-          p.y = q.y; p.vy = 0; p.ground = true; p.squash = 0.72;
+          p.y = q.y; p.vy = 0; p.ground = true;
           land(q.floor); break;
         }
       }
     }
 
-    // kamera + yükselen sınır
     camY = Math.min(camY, p.y - 0.62*H);
-    if (maxFloor >= 4) {
-      rise = Math.min(300, 26 + maxFloor*1.9);
+    if (maxFloor >= 5) {
+      rise = Math.min(330, 30 + maxFloor*1.8);
       camY -= rise * dt;
     }
     grow();
@@ -152,7 +155,7 @@
     shake *= Math.pow(0.001, dt);
     for (const d of dust) { d.life -= dt; d.x += d.vx*dt; d.y += d.vy*dt; d.vy += 400*dt; }
     dust = dust.filter(d => d.life > 0);
-    for (const q of pops) { q.life -= dt; q.y -= 46*dt; }
+    for (const q of pops) { q.life -= dt; q.y -= 44*dt; }
     pops = pops.filter(q => q.life > 0);
   }
 
@@ -161,31 +164,39 @@
   function land(f){
     const gain = f - p.takeoff;
     if (f > maxFloor) maxFloor = f;
+
+    if (p.dive) {                       // dalışla indin: hızını koru, hatta kazan
+      p.vx = Math.max(-MAX_VX, Math.min(MAX_VX, p.vx * DIVE_GAIN));
+      if (Math.abs(p.vx) < 150) p.vx = p.dir * 150;
+      p.squash = 0.6; shake = Math.max(shake, 3);
+      puff(p.x, p.y, 9, 260);
+    } else {                            // düz indin: hız kaybı
+      p.vx *= LAND_LOSS;
+      p.squash = 0.75;
+      puff(p.x, p.y, 3);
+    }
+    p.dive = false;
+
     if (gain >= 2) {
       p.chain = (t - p.lastLand < CHAIN_WIN) ? p.chain + 1 : 1;
-      const pts = gain * gain * 6 * p.chain;
-      score += pts;
-      pop(p.x, p.y - 40, p.chain > 1 ? `${gain} KAT ×${p.chain}` : `${gain} KAT`,
-          p.chain > 1 ? C.mint : C.amber);
+      score += gain * gain * 6 * p.chain;
+      if (p.chain > 1) pop(p.x, p.y - 46, 'x' + p.chain);
     } else {
       score += Math.max(0, gain);
       if (t - p.lastLand >= CHAIN_WIN) p.chain = 0;
     }
     p.lastLand = t;
-    puff(p.x, p.y, 3);
-    if (over === false && score > best) best = score;
+    if (score > best) best = score;
   }
 
   // ---- çizim -----------------------------------------------------------
   function draw(){
-    const sx = (Math.random()-.5)*shake, sy = (Math.random()-.5)*shake;
-    ctx.save(); ctx.translate(sx, sy);
+    ctx.save(); ctx.translate((Math.random()-.5)*shake, (Math.random()-.5)*shake);
 
     const g = ctx.createLinearGradient(0,0,0,H);
     g.addColorStop(0, C.bgTop); g.addColorStop(1, C.bgBot);
     ctx.fillStyle = g; ctx.fillRect(-10,-10,W+20,H+20);
 
-    // duvarlar + kayan taş çizgileri
     ctx.fillStyle = C.wall;
     ctx.fillRect(0,0,WALL,H); ctx.fillRect(W-WALL,0,WALL,H);
     ctx.strokeStyle = C.wallLine; ctx.lineWidth = 2;
@@ -195,14 +206,11 @@
       ctx.moveTo(W-WALL,y+17); ctx.lineTo(W,y+17); ctx.stroke();
     }
 
-    // platformlar
     for (const q of plats) {
       const y = q.y - camY;
       if (y < -30 || y > H + 30) continue;
-      ctx.fillStyle = C.stone;
-      round(q.x, y, q.w, 15, 5); ctx.fill();
-      ctx.fillStyle = C.stoneTop;
-      round(q.x, y, q.w, 4, 2); ctx.fill();
+      ctx.fillStyle = C.stone; round(q.x, y, q.w, 15, 5); ctx.fill();
+      ctx.fillStyle = C.stoneTop; round(q.x, y, q.w, 4, 2); ctx.fill();
       if (q.floor % 10 === 0 && q.floor > 0) {
         ctx.fillStyle = C.mark; ctx.font = '600 12px ui-monospace,monospace';
         ctx.textAlign = 'center'; ctx.fillText(q.floor, q.x + q.w/2, y + 13);
@@ -211,12 +219,17 @@
 
     for (const d of dust) {
       ctx.globalAlpha = Math.max(0, d.life*2);
-      ctx.fillStyle = C.dim;
-      ctx.fillRect(d.x-2, d.y-camY-2, 4, 4);
+      ctx.fillStyle = C.dim; ctx.fillRect(d.x-2, d.y-camY-2, 4, 4);
     }
     ctx.globalAlpha = 1;
 
-    // oyuncu — fenerli figür
+    // dalış izi
+    if (p.dive) {
+      ctx.globalAlpha = .35; ctx.fillStyle = C.amber;
+      round(p.x-7, p.y-camY-90, 14, 70, 7); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
     const py = p.y - camY, sq = p.squash, w = 24/sq, h = 34*sq;
     ctx.save();
     ctx.shadowColor = C.amber; ctx.shadowBlur = 26;
@@ -227,40 +240,26 @@
     ctx.fillRect(p.x - 5 + p.dir*4, py - h + 9, 3, 4);
     ctx.fillRect(p.x + 2 + p.dir*4, py - h + 9, 3, 4);
 
-    // dokunma bölgeleri — hangi yarı ne yapıyor, yön değişince yer değiştirir
-    const zw = (W-2*WALL-36)/2, zy = H-62;
-    ctx.fillStyle = 'rgba(255,255,255,.05)';
-    round(WALL+14, zy-16, zw, 22, 6); ctx.fill();
-    round(W/2+4, zy-16, zw, 22, 6); ctx.fill();
-    ctx.font = '600 11px ui-monospace,monospace'; ctx.textAlign = 'center';
-    ctx.fillStyle = p.dir === -1 ? C.amber : C.dim;
-    ctx.fillText(p.dir === -1 ? 'ZIPLA' : 'DÖN', WALL+14+zw/2, zy);
-    ctx.fillStyle = p.dir === 1 ? C.amber : C.dim;
-    ctx.fillText(p.dir === 1 ? 'ZIPLA' : 'DÖN', W/2+4+zw/2, zy);
-
-    // hız göstergesi — ne zaman zıplayacağını söyleyen tek ipucu
+    // hız göstergesi
     const sp = Math.abs(p.vx)/MAX_VX;
     ctx.fillStyle = 'rgba(255,255,255,.10)';
     round(WALL+14, H-40, W-2*WALL-28, 8, 4); ctx.fill();
-    ctx.fillStyle = sp > .9 ? C.mint : C.amber;
+    ctx.fillStyle = C.amber;
     round(WALL+14, H-40, (W-2*WALL-28)*sp, 8, 4); ctx.fill();
 
-    // HUD
     ctx.textAlign = 'left'; ctx.fillStyle = C.text;
-    ctx.font = '700 30px ui-monospace,monospace';
-    ctx.fillText(score, WALL+16, 52);
+    ctx.font = '700 30px ui-monospace,monospace'; ctx.fillText(score, WALL+16, 52);
     ctx.font = '600 12px ui-monospace,monospace'; ctx.fillStyle = C.dim;
     ctx.fillText('PUAN', WALL+16, 68);
     ctx.textAlign = 'right'; ctx.fillStyle = C.text;
-    ctx.font = '700 30px ui-monospace,monospace';
-    ctx.fillText(maxFloor, W-WALL-16, 52);
+    ctx.font = '700 30px ui-monospace,monospace'; ctx.fillText(maxFloor, W-WALL-16, 52);
     ctx.font = '600 12px ui-monospace,monospace'; ctx.fillStyle = C.dim;
     ctx.fillText('KAT · REKOR ' + best, W-WALL-16, 68);
 
     for (const q of pops) {
       ctx.globalAlpha = Math.min(1, q.life*1.6);
-      ctx.fillStyle = q.col; ctx.textAlign = 'center';
-      ctx.font = '700 20px ui-monospace,monospace';
+      ctx.fillStyle = C.amber; ctx.textAlign = 'center';
+      ctx.font = '700 22px ui-monospace,monospace';
       ctx.fillText(q.txt, q.x, q.y - camY);
     }
     ctx.globalAlpha = 1;
@@ -271,16 +270,16 @@
       ctx.font = '700 34px ui-monospace,monospace';
       ctx.fillText('DÜŞTÜN', W/2, H/2 - 40);
       ctx.font = '600 16px ui-monospace,monospace'; ctx.fillStyle = C.dim;
-      ctx.fillText(`${maxFloor}. kat · ${score} puan`, W/2, H/2 - 8);
+      ctx.fillText(maxFloor + '. kat · ' + score + ' puan', W/2, H/2 - 8);
       ctx.fillStyle = C.amber; ctx.font = '700 16px ui-monospace,monospace';
       ctx.fillText('yeniden başlamak için dokun', W/2, H/2 + 40);
-    } else if (maxFloor === 0 && t < 6) {
-      ctx.globalAlpha = Math.max(0, 1 - t/6);
+    } else if (maxFloor === 0 && t < 7) {
+      ctx.globalAlpha = Math.max(0, 1 - t/7);
       ctx.textAlign = 'center'; ctx.fillStyle = C.dim;
       ctx.font = '600 14px ui-monospace,monospace';
-      ctx.fillText('baktığın yöne dokun = zıpla', W/2, H/2);
-      ctx.fillText('ters tarafa dokun = geri dön', W/2, H/2 + 24);
-      ctx.fillText('hızlıyken zıpla, daha yükseğe çıkarsın', W/2, H/2 + 48);
+      ctx.fillText('yerdeyken dokun = zıpla', W/2, H/2);
+      ctx.fillText('havadayken dokun = dalış', W/2, H/2 + 24);
+      ctx.fillText('dalarak inersen hızını kaybetmezsin', W/2, H/2 + 48);
       ctx.globalAlpha = 1;
     }
     ctx.restore();
@@ -292,7 +291,6 @@
     ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
   }
 
-  // ---- döngü -----------------------------------------------------------
   let last = performance.now();
   function loop(now){
     const dt = Math.min(0.033, (now - last)/1000); last = now;
