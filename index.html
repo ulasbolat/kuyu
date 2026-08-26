@@ -16,15 +16,15 @@
   const WALL = 16;
   const FLOOR_H = 88;
   const G = 2300;
-  const MAX_VX = 520;
-  const ACC = 1250;
-  const AIR = 0.62;
-  const JUMP_BASE = 730;
-  const JUMP_K = 1.25;
-  const WALL_KEEP = 1.00;   // duvardan sekerken hiç hız kaybı yok
-  const LAND_LOSS = 0.95;   // normal inişte küçük hız kaybı
-  const DIVE_GAIN = 1.20;   // dalışla inince hız çarpanı
-  const DIVE_VY = 1250;
+  const MAX_VX = 520;       // üst koşu hızı
+  const ACC = 1350;         // tam eğimde ivme
+  const AIR = 0.55;         // havadaki yön kontrolü
+  const DRAG_GROUND = 0.04; // yerde girdi yokken yavaşlama (saniyede kalan oran)
+  const JUMP_BASE = 730;    // duran zıplama
+  const JUMP_K = 1.25;      // hız → zıplama katkısı
+  const WALL_KEEP = 0.55;   // duvara toslayınca korunan hız
+  const TILT_DEAD = 3.5;    // derece, ölü bölge
+  const TILT_FULL = 20;     // derece, tam gaz
   const COYOTE = 0.09, BUFFER = 0.13, CHAIN_WIN = 0.45;
 
   const C = {
@@ -33,7 +33,6 @@
     amber:'#FFB454', text:'#EDE9FF', dim:'#6E6494'
   };
 
-  // ---- kurulum ---------------------------------------------------------
   const cv = document.getElementById('c'), ctx = cv.getContext('2d');
   function resize(){
     const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
@@ -45,15 +44,15 @@
   let p, plats, camY, rise, score, best=0, maxFloor, over, shake, pops, dust, t, side;
 
   function reset(){
-    p = { x:W/2, y:0, vx:240, vy:0, dir:1, ground:true, coyote:0, buffer:0,
-          dive:false, takeoff:0, lastLand:0, chain:0, squash:1 };
+    p = { x:W/2, y:0, vx:0, vy:0, dir:1, ground:true, coyote:0, buffer:0,
+          takeoff:0, lastLand:0, chain:0, squash:1 };
     plats = [{ x:WALL, y:0, w:W-2*WALL, floor:0 }];
     camY = -0.62*H; rise = 0; score = 0; maxFloor = 0; over = false;
     shake = 0; pops = []; dust = []; t = 0; side = 1;
+    baseGamma = null;
     grow();
   }
 
-  // platformlar dönüşümlü olarak sağa-sola yerleşir; zikzak rota her zaman mevcut
   function grow(){
     let top = plats[plats.length-1];
     while (top.y > camY - 400) {
@@ -63,32 +62,73 @@
       w = Math.min(w, W-2*WALL-24);
       const span = W-2*WALL-24-w;
       let x;
-      if (big) { x = WALL+12+span/2; }
-      else {
-        side = -side;
-        x = WALL + 12 + (side > 0 ? span*(0.5+Math.random()*0.5) : span*Math.random()*0.5);
-      }
+      if (big) x = WALL+12+span/2;
+      else { side = -side;
+        x = WALL + 12 + (side > 0 ? span*(0.5+Math.random()*0.5) : span*Math.random()*0.5); }
       plats.push({ x, y:-f*FLOOR_H, w, floor:f });
       top = plats[plats.length-1];
     }
     while (plats.length && plats[0].y - camY > H + 200) plats.shift();
   }
 
-  // ---- girdi: tek parmak, tek kural ------------------------------------
-  // Yerdeyken dokun  = zıpla
-  // Havadayken dokun = dalış (hızlı in, hızını koru)
-  function tap(){
-    if (over) { reset(); return; }
-    if (p.ground || p.coyote > 0) p.buffer = BUFFER;
-    else if (!p.dive && p.vy > -260) { p.dive = true; p.vy = DIVE_VY; p.squash = 1.4; }
+  // ---- girdi -----------------------------------------------------------
+  // Yön  : telefonu sağa/sola yatır (sensör yoksa köşe tuşları)
+  // Zıpla: ekranın herhangi bir yerine dokun
+  let tilt = 0, baseGamma = null, tiltSeen = 0, keyDir = 0;
+  const holds = new Map();
+
+  addEventListener('deviceorientation', e => {
+    if (e.gamma == null) return;
+    tiltSeen = performance.now();
+    if (baseGamma === null) baseGamma = e.gamma;          // eldeki doğal açıyı sıfır kabul et
+    const d = e.gamma - baseGamma;
+    const mag = Math.max(0, Math.abs(d) - TILT_DEAD) / (TILT_FULL - TILT_DEAD);
+    tilt = Math.sign(d) * Math.min(1, mag);
+  });
+  const tiltOn = () => performance.now() - tiltSeen < 1500;
+
+  function btnAt(cx, cy){
+    const r = cv.getBoundingClientRect();
+    const x = (cx - r.left) / r.width * W, y = (cy - r.top) / r.height * H;
+    if (y < H-190) return 0;
+    if (x < 150) return -1;
+    if (x > W-150) return 1;
+    return 0;
   }
-  cv.addEventListener('pointerdown', e => { e.preventDefault(); tap(); });
+
+  cv.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    if (over) { reset(); return; }
+    if (typeof DeviceOrientationEvent !== 'undefined' &&
+        typeof DeviceOrientationEvent.requestPermission === 'function' && !tiltSeen) {
+      DeviceOrientationEvent.requestPermission().catch(()=>{});
+    }
+    const b = tiltOn() ? 0 : btnAt(e.clientX, e.clientY);
+    if (b) holds.set(e.pointerId, b); else p.buffer = BUFFER;
+  });
+  const release = e => holds.delete(e.pointerId);
+  cv.addEventListener('pointerup', release);
+  cv.addEventListener('pointercancel', release);
+
   addEventListener('keydown', e => {
-    if (e.repeat) return;
-    if (e.code === 'Space' || e.code === 'ArrowDown' || e.code === 'ArrowUp') { e.preventDefault(); tap(); }
+    if (e.code === 'ArrowLeft') keyDir = -1;
+    if (e.code === 'ArrowRight') keyDir = 1;
+    if ((e.code === 'Space' || e.code === 'ArrowUp') && !e.repeat) {
+      e.preventDefault(); over ? reset() : (p.buffer = BUFFER);
+    }
+  });
+  addEventListener('keyup', e => {
+    if (e.code === 'ArrowLeft' && keyDir === -1) keyDir = 0;
+    if (e.code === 'ArrowRight' && keyDir === 1) keyDir = 0;
   });
 
-  // ---- efektler --------------------------------------------------------
+  function inputDir(){
+    if (keyDir) return keyDir;
+    if (tiltOn()) return tilt;
+    let d = 0; for (const v of holds.values()) d += v;
+    return Math.max(-1, Math.min(1, d));
+  }
+
   function puff(x,y,n,sp){
     for (let i=0;i<n;i++) dust.push({x,y,vx:(Math.random()-.5)*(sp||140),vy:-Math.random()*90,life:.4});
   }
@@ -102,15 +142,19 @@
     p.buffer = Math.max(0, p.buffer - dt);
     p.coyote = p.ground ? COYOTE : Math.max(0, p.coyote - dt);
 
-    // otomatik koşu — yön oyuncunun derdi değil
-    p.vx += p.dir * ACC * (p.ground ? 1 : AIR) * dt;
+    const inp = inputDir();
+    if (inp !== 0) {
+      p.vx += inp * ACC * (p.ground ? 1 : AIR) * dt;
+      p.dir = inp > 0 ? 1 : -1;
+    } else if (p.ground) {
+      p.vx *= Math.pow(DRAG_GROUND, dt);      // bırakırsan hız erir, zıplaman alçalır
+    }
     p.vx = Math.max(-MAX_VX, Math.min(MAX_VX, p.vx));
 
     if (p.buffer > 0 && p.coyote > 0) {
       p.vy = -(JUMP_BASE + JUMP_K * Math.abs(p.vx));
-      p.ground = false; p.coyote = 0; p.buffer = 0; p.dive = false;
-      p.takeoff = curFloor();
-      p.squash = 1.35;
+      p.ground = false; p.coyote = 0; p.buffer = 0;
+      p.takeoff = curFloor(); p.squash = 1.35;
       puff(p.x, p.y, 5);
     }
 
@@ -119,31 +163,27 @@
     const prevY = p.y;
     p.y += p.vy * dt;
 
-    // duvardan sekme — yön değişimi buradan geliyor, hız neredeyse hiç düşmüyor
     if (p.x - 12 < WALL) {
-      p.x = WALL+12; p.vx = Math.abs(p.vx)*WALL_KEEP; p.dir = 1;
-      shake = Math.max(shake, Math.abs(p.vx)/80); puff(p.x, p.y-16, 4, 60);
+      p.x = WALL+12; p.vx = Math.abs(p.vx)*WALL_KEEP;
+      shake = Math.max(shake, Math.abs(p.vx)/110); puff(p.x, p.y-16, 4, 60);
     }
     if (p.x + 12 > W-WALL) {
-      p.x = W-WALL-12; p.vx = -Math.abs(p.vx)*WALL_KEEP; p.dir = -1;
-      shake = Math.max(shake, Math.abs(p.vx)/80); puff(p.x, p.y-16, 4, 60);
+      p.x = W-WALL-12; p.vx = -Math.abs(p.vx)*WALL_KEEP;
+      shake = Math.max(shake, Math.abs(p.vx)/110); puff(p.x, p.y-16, 4, 60);
     }
 
     p.ground = false;
     if (p.vy > 0) {
       for (const q of plats) {
         if (prevY <= q.y + 1 && p.y >= q.y && p.x + 11 > q.x && p.x - 11 < q.x + q.w) {
-          p.y = q.y; p.vy = 0; p.ground = true;
+          p.y = q.y; p.vy = 0; p.ground = true; p.squash = 0.75;
           land(q.floor); break;
         }
       }
     }
 
     camY = Math.min(camY, p.y - 0.62*H);
-    if (maxFloor >= 5) {
-      rise = Math.min(330, 30 + maxFloor*1.8);
-      camY -= rise * dt;
-    }
+    if (maxFloor >= 5) { rise = Math.min(330, 30 + maxFloor*1.8); camY -= rise * dt; }
     grow();
     if (p.y - camY > H + 30) { over = true; shake = 6; }
 
@@ -164,19 +204,7 @@
   function land(f){
     const gain = f - p.takeoff;
     if (f > maxFloor) maxFloor = f;
-
-    if (p.dive) {                       // dalışla indin: hızını koru, hatta kazan
-      p.vx = Math.max(-MAX_VX, Math.min(MAX_VX, p.vx * DIVE_GAIN));
-      if (Math.abs(p.vx) < 150) p.vx = p.dir * 150;
-      p.squash = 0.6; shake = Math.max(shake, 3);
-      puff(p.x, p.y, 9, 260);
-    } else {                            // düz indin: hız kaybı
-      p.vx *= LAND_LOSS;
-      p.squash = 0.75;
-      puff(p.x, p.y, 3);
-    }
-    p.dive = false;
-
+    puff(p.x, p.y, 3);
     if (gain >= 2) {
       p.chain = (t - p.lastLand < CHAIN_WIN) ? p.chain + 1 : 1;
       score += gain * gain * 6 * p.chain;
@@ -223,24 +251,24 @@
     }
     ctx.globalAlpha = 1;
 
-    // dalış izi
-    if (p.dive) {
-      ctx.globalAlpha = .35; ctx.fillStyle = C.amber;
-      round(p.x-7, p.y-camY-90, 14, 70, 7); ctx.fill();
-      ctx.globalAlpha = 1;
-    }
-
     const py = p.y - camY, sq = p.squash, w = 24/sq, h = 34*sq;
     ctx.save();
     ctx.shadowColor = C.amber; ctx.shadowBlur = 26;
-    ctx.fillStyle = C.amber;
-    round(p.x - w/2, py - h, w, h, 7); ctx.fill();
+    ctx.fillStyle = C.amber; round(p.x - w/2, py - h, w, h, 7); ctx.fill();
     ctx.restore();
     ctx.fillStyle = '#3A2408';
     ctx.fillRect(p.x - 5 + p.dir*4, py - h + 9, 3, 4);
     ctx.fillRect(p.x + 2 + p.dir*4, py - h + 9, 3, 4);
 
-    // hız göstergesi
+    // sensör yoksa köşe tuşları
+    if (!tiltOn() && !keyDir) {
+      ctx.fillStyle = 'rgba(255,255,255,.06)';
+      round(24, H-160, 110, 110, 22); ctx.fill();
+      round(W-134, H-160, 110, 110, 22); ctx.fill();
+      ctx.fillStyle = C.dim; ctx.font = '700 26px ui-monospace,monospace'; ctx.textAlign = 'center';
+      ctx.fillText('◀', 79, H-95); ctx.fillText('▶', W-79, H-95);
+    }
+
     const sp = Math.abs(p.vx)/MAX_VX;
     ctx.fillStyle = 'rgba(255,255,255,.10)';
     round(WALL+14, H-40, W-2*WALL-28, 8, 4); ctx.fill();
@@ -277,9 +305,9 @@
       ctx.globalAlpha = Math.max(0, 1 - t/7);
       ctx.textAlign = 'center'; ctx.fillStyle = C.dim;
       ctx.font = '600 14px ui-monospace,monospace';
-      ctx.fillText('yerdeyken dokun = zıpla', W/2, H/2);
-      ctx.fillText('havadayken dokun = dalış', W/2, H/2 + 24);
-      ctx.fillText('dalarak inersen hızını kaybetmezsin', W/2, H/2 + 48);
+      ctx.fillText('telefonu sağa sola yatır = koş', W/2, H/2);
+      ctx.fillText('ekrana dokun = zıpla', W/2, H/2 + 24);
+      ctx.fillText('hız çubuğu doluyken zıpla, yükseğe çıkarsın', W/2, H/2 + 48);
       ctx.globalAlpha = 1;
     }
     ctx.restore();
