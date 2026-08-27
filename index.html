@@ -42,7 +42,7 @@
     { n:'BUZ',      a:'#04121C', b:'#12456B', w:'#08202F', wl:'#123B54', s:'#1E5A7A', st:'#7FD6F0', ac:'#EAF9FF', bk:'#0B2E45', pt:{c:'#CFEEFB',d:1,r:1.8,v:38}, hz:{k:'slow',l:'snow',c:0.26,r:19} },
     { n:'ORMAN',    a:'#050F09', b:'#12401F', w:'#0A1C11', wl:'#14301C', s:'#2C4A22', st:'#7CB342', ac:'#F0E68C', bk:'#0C2A15', pt:{c:'#9CCB5A',d:1,r:2.2,v:30}, hz:{k:'heavy',l:'vine',c:0.24,r:18} },
     { n:'OKYANUS',  a:'#00121F', b:'#023A52', w:'#021D2B', wl:'#04364A', s:'#0B4F5C', st:'#3FBFA8', ac:'#FFE9A8', bk:'#032A3C', pt:{c:'#7FE8DA',d:-1,r:2.4,v:34}, hz:{k:'push',l:'akinti',c:0.26,r:21} },
-    { n:'GÖKDELEN', a:'#0A0C12', b:'#1C2436', w:'#12161F', wl:'#1E2836', s:'#2A3346', st:'#5F7392', ac:'#5AE0FF', bk:'#151B28', pt:{c:'#8FA6C4',d:1,r:1.4,v:120}, hz:{k:'kill',l:'bolt',c:0.20,r:16} },
+    { n:'GÖKDELEN', a:'#0A0C12', b:'#1C2436', w:'#12161F', wl:'#1E2836', s:'#2A3346', st:'#5F7392', ac:'#5AE0FF', bk:'#151B28', pt:{c:'#8FA6C4',d:1,r:1.4,v:120}, hz:{k:'kill',l:'bomba',c:0.20,r:15} },
     { n:'ÇÖL',      a:'#1A1206', b:'#6B4A16', w:'#241A0A', wl:'#3E2C12', s:'#5C4420', st:'#D9AE5F', ac:'#FFF1C9', bk:'#3A2A10', pt:{c:'#E3C583',d:1,r:1.5,v:44}, hz:{k:'slow',l:'kum',c:0.26,r:20} },
     { n:'UZAY',     a:'#03030B', b:'#160C2E', w:'#0A0818', wl:'#181038', s:'#2A1F52', st:'#8C6FE0', ac:'#FF7AC6', bk:'#0C0820', pt:{c:'#FFFFFF',d:-1,r:1.3,v:14}, hz:{k:'pull',l:'delik',c:0.18,r:23} },
   ];
@@ -67,14 +67,15 @@
     safeBot = Number.isFinite(b) ? b : 0;
   }
 
+  let lastTrap = -99;
   let p, plats, orbs, amb, camY, rise, score, best = 0, maxFloor, over, shake,
       pops, dust, t, side, heat, themeI, themeMix, themeFrom, banner;
 
   function reset(){
     p = { x:W/2, y:0, vx:0, vy:0, dir:1, takeoff:0, lastLand:0, chain:0, squash:1,
-          lock:0, fly:0, phase:0, slowT:0, heavyT:0 };
+          lock:0, fly:0, phase:0, slowT:0, heavyT:0, grace:false };
     plats = [{ x:WALL, y:0, w:W-2*WALL, floor:0, type:'wide' }];
-    orbs = [];
+    orbs = []; lastTrap = -99;
     camY = -0.62*H; rise = 0; score = 0; maxFloor = 0; over = false;
     shake = 0; pops = []; dust = []; t = 0; side = 1; heat = 0;
     themeI = 0; themeMix = 1; themeFrom = 0; banner = 0;
@@ -93,41 +94,45 @@
   function orbX(o){ return o.bx + Math.sin(t*1.3 + o.ph) * o.sw; }
   function theme(){ return THEMES[themeI % THEMES.length]; }
 
-  function grow(){
-    let top = plats[plats.length-1];
-    while (top.y > camY - 500) {
-      const f = top.floor + 1;
-      const rest = f % 25 === 0;
-      let w = rest ? 190 : Math.max(76, 132 - f*0.14) + Math.random()*22;
-      let cx;
-      if (rest) cx = W/2;
-      else { side = -side;
-        cx = side < 0 ? W*(0.17 + Math.random()*0.20) : W*(0.63 + Math.random()*0.20); }
-      const x = Math.max(WALL+8, Math.min(W-WALL-8-w, cx - w/2));
-      const trap  = !rest && f > 14 && Math.random() < 0.12;
-      const haz   = !rest && !trap && f > 11 && Math.random() < 0.34
-                    ? ['l','r','m'][(Math.random()*3)|0] : null;
-      const boost = !rest && !trap && !haz && f > 18 && Math.random() < 0.075;
-      plats.push({ x, y:-f*FLOOR_H, w, floor:f,
-                   type: rest ? 'wide' : trap ? 'trap' : 'normal',
-                   haz, boost, broken:0 });
+  function growOne(){
+    const f = plats[plats.length-1].floor + 1;
+    const rest = f % 25 === 0;
+    let w = rest ? 190 : Math.max(76, 132 - f*0.14) + Math.random()*22;
+    let cx;
+    if (rest) cx = W/2;
+    else { side = -side;
+      cx = side < 0 ? W*(0.17 + Math.random()*0.20) : W*(0.63 + Math.random()*0.20); }
+    const x = Math.max(WALL+8, Math.min(W-WALL-8-w, cx - w/2));
+    // çatlak taşlar arasında en az 4 kat boşluk: üst üste gelip çıkışsız bırakmasın
+    const trap  = !rest && f > 4 && f - lastTrap >= 4 && Math.random() < 0.11;
+    if (trap) lastTrap = f;
+    const haz   = !rest && !trap && f > 50 && Math.random() < 0.17
+                  ? ['l','r','m'][(Math.random()*3)|0] : null;
+    const boost = !rest && !trap && !haz && f > 18 && Math.random() < 0.075;
+    plats.push({ x, y:-f*FLOOR_H, w, floor:f,
+                 type: rest ? 'wide' : trap ? 'trap' : 'normal',
+                 haz, boost, broken:0 });
 
-      const hz = THEMES[Math.floor(f / THEME_EVERY) % THEMES.length].hz;
-      if (hz && !rest && f > 6 && Math.random() < hz.c) {
-        orbs.push({ bx: WALL + 34 + Math.random()*(W-2*WALL-68), y: -f*FLOOR_H - 46,
-                    r: hz.r, k: hz.k, l: hz.l, ph: Math.random()*6, sw: 18 + Math.random()*26 });
-      }
-      top = plats[plats.length-1];
+    const hz = THEMES[Math.floor(f / THEME_EVERY) % THEMES.length].hz;
+    if (hz && !rest && f > 6 && Math.random() < hz.c) {
+      orbs.push({ bx: WALL + 34 + Math.random()*(W-2*WALL-68), y: -f*FLOOR_H - 46,
+                  r: hz.r, k: hz.k, l: hz.l, ph: Math.random()*6, sw: 18 + Math.random()*26 });
     }
+  }
+
+  function ensureUpTo(f){ while (plats[plats.length-1].floor < f) growOne(); }
+
+  function grow(){
+    while (plats[plats.length-1].y > camY - 500) growOne();
     while (plats.length && plats[0].y - camY > H + 200) plats.shift();
     while (orbs.length && orbs[0].y - camY > H + 200) orbs.shift();
   }
 
   // dikenli bölgenin yatay aralığı
   function hazSpan(q){
-    if (q.haz === 'l') return [q.x, q.x + q.w*0.34];
-    if (q.haz === 'r') return [q.x + q.w*0.66, q.x + q.w];
-    return [q.x + q.w*0.34, q.x + q.w*0.66];
+    if (q.haz === 'l') return [q.x, q.x + q.w*0.20];
+    if (q.haz === 'r') return [q.x + q.w*0.80, q.x + q.w];
+    return [q.x + q.w*0.41, q.x + q.w*0.59];
   }
 
   // ---- girdi: parmakla kaydır ------------------------------------------
@@ -210,9 +215,16 @@
       for (const q of plats) {
         if (q.broken) continue;
         if (prevY <= q.y + 1 && p.y >= q.y && p.x + 11 > q.x && p.x - 11 < q.x + q.w) {
+          if (p.grace) {                              // fırlamadan sonraki ilk iniş bedava
+            p.grace = false;
+            p.y = q.y; land(q);
+            p.vy = -Math.sqrt(2 * gg * JUMP_H * FLOOR_H);
+            p.takeoff = q.floor; p.squash = 0.72;
+            break;
+          }
           if (q.haz) {
             const [z0, z1] = hazSpan(q);
-            if (p.x > z0 - 5 && p.x < z1 + 5) {      // dikenlere bastın
+            if (p.x > z0 - 2 && p.x < z1 + 2) {      // dikenlere bastın
               over = true; shake = 8;
               puff(p.x, p.y, 14, 260, '#D9DEE8');
               break;
@@ -223,7 +235,7 @@
             puff(q.x + q.w/2, q.y, 10, 220, '#8A6B4A');
             p.chain = 0; heat = Math.max(0, heat - 0.3);
           } else {
-            p.y = q.y; land(q.floor);
+            p.y = q.y; land(q);
             p.vy = -Math.sqrt(2 * gg * JUMP_H * FLOOR_H);   // yükseklik sabit, tempo artıyor
             p.takeoff = q.floor; p.squash = 0.72;
           }
@@ -239,6 +251,20 @@
         q.boost = false;
         p.vy = -Math.sqrt(2 * gg * JUMP_H * FLOOR_H) * BOOST_VY;
         heat = Math.min(1, heat + 0.45); score += 120;
+        // fırlamanın varış bölgesini güvenli hale getir
+        const tf = q.floor + Math.round(JUMP_H * BOOST_VY * BOOST_VY);
+        ensureUpTo(tf + 3);
+        for (const z of plats) {
+          if (z.floor < tf - 2 || z.floor > tf + 3) continue;
+          z.haz = null; z.broken = 0;
+          if (z.type === 'trap') z.type = 'normal';
+          if (z.floor >= tf - 1 && z.floor <= tf + 1) { z.w = 200; z.x = W/2 - 100; }
+        }
+        orbs = orbs.filter(o => {
+          const of = Math.round(-(o.y + 46) / FLOOR_H);
+          return of < tf - 2 || of > tf + 3;
+        });
+        p.grace = true;
         pops.push({ x:W/2, y:p.y - 120, txt:'FIRLADIN', sub:'', life:1 });
         shake = Math.max(shake, 4);
         puff(bx, by, 16, 320, theme().ac);
@@ -302,8 +328,19 @@
     pops = pops.filter(q => q.life > 0);
   }
 
-  function land(f){
+  function land(q){
+    const f = q.floor;
     const gain = f - p.takeoff;
+
+    // taşın ucundan sekersen hızlanırsın: risk alan ödüllenir
+    const edge = Math.min(p.x - q.x, q.x + q.w - p.x);
+    if (edge < 14 && q.type !== 'wide') {
+      const out = p.x > q.x + q.w/2 ? 1 : -1;
+      p.vx = out * Math.max(Math.abs(p.vx) * 1.45, curSpeed() * 1.3);
+      p.fly = 0.45; heat = Math.min(1, heat + 0.14); score += 25;
+      pops.push({ x:W/2, y:p.y - 96, txt:'KENAR', sub:'', life:0.75 });
+      puff(p.x, p.y, 8, 220, theme().ac);
+    }
     if (f > maxFloor) maxFloor = f;
     puff(p.x, p.y, gain >= 2 ? 7 : 3, gain >= 2 ? 200 : 140, theme().st);
     if (gain >= 2) {
@@ -451,15 +488,15 @@
         ctx.fillStyle = stoneTop; round(q.x, y, q.w, 4, 2); ctx.fill();
       }
       if (q.haz) {                                               // platform üstü dikenler
-        const [z0, z1] = hazSpan(q), n = Math.max(2, Math.round((z1-z0)/13));
+        const [z0, z1] = hazSpan(q), n = Math.max(2, Math.round((z1-z0)/9));
         const step2 = (z1-z0)/n;
         ctx.fillStyle = '#20242E';
-        ctx.fillRect(z0, y - 2, z1-z0, 4);
+        ctx.fillRect(z0, y - 1.5, z1-z0, 3);
         ctx.fillStyle = '#D9DEE8';
         for (let i = 0; i < n; i++) {
           const x0 = z0 + i*step2;
-          ctx.beginPath(); ctx.moveTo(x0, y - 2); ctx.lineTo(x0 + step2/2, y - 15);
-          ctx.lineTo(x0 + step2, y - 2); ctx.closePath(); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(x0, y - 1.5); ctx.lineTo(x0 + step2/2, y - 6.5);
+          ctx.lineTo(x0 + step2, y - 1.5); ctx.closePath(); ctx.fill();
         }
       }
       if (q.floor % 25 === 0 && q.floor > 0) {
@@ -493,12 +530,20 @@
         ctx.beginPath(); ctx.arc(x, y, r + Math.sin(k)*2, 0, 7); ctx.fill();
         ctx.fillStyle = '#FFD166';
         ctx.beginPath(); ctx.arc(x, y + 2, r*0.5 + Math.cos(k)*1.5, 0, 7); ctx.fill();
-      } else if (o.l === 'bolt') {
-        ctx.shadowColor = '#5AE0FF'; ctx.shadowBlur = 24;
-        ctx.strokeStyle = '#5AE0FF'; ctx.lineWidth = 3.5; ctx.lineJoin = 'round';
-        ctx.beginPath();
-        ctx.moveTo(x, y - r); ctx.lineTo(x - r*0.5, y); ctx.lineTo(x + r*0.35, y);
-        ctx.lineTo(x - r*0.15, y + r); ctx.stroke();
+      } else if (o.l === 'bomba') {
+        ctx.fillStyle = '#15181F';
+        ctx.beginPath(); ctx.arc(x, y + 2, r, 0, 7); ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,.22)';
+        ctx.beginPath(); ctx.arc(x - r*0.35, y - r*0.3, r*0.28, 0, 7); ctx.fill();
+        ctx.fillStyle = '#2A2F3A';
+        ctx.fillRect(x - 4, y - r - 3, 8, 6);
+        ctx.strokeStyle = '#8A6B4A'; ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.moveTo(x, y - r - 3);
+        ctx.quadraticCurveTo(x + 9, y - r - 12, x + 4, y - r - 19); ctx.stroke();
+        ctx.save(); ctx.shadowColor = '#FFB454'; ctx.shadowBlur = 16;
+        ctx.fillStyle = Math.sin(k*3) > 0 ? '#FFD166' : '#FF7A3D';
+        ctx.beginPath(); ctx.arc(x + 4, y - r - 20, 3.4 + Math.sin(k*4)*1.2, 0, 7); ctx.fill();
+        ctx.restore();
       } else if (o.l === 'snow') {
         ctx.fillStyle = '#E8F6FF';
         ctx.beginPath(); ctx.arc(x - r*0.45, y + 3, r*0.6, 0, 7);
