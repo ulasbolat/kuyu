@@ -18,8 +18,10 @@
   let H = 800, safeTop = 0, safeBot = 0;
   const WALL = 16, FLOOR_H = 88, G = 2300;
   const JUMP_VY = 1085;      // sabit zıplama — yaklaşık 2,9 kat
-  const SPD_MIN = 260, SPD_MAX = 600, SPD_RAMP = 2.2;
-  const SENS = 1.35;         // parmak hareketi → karakter hareketi çarpanı
+  const SPD_MIN = 330, SPD_MAX = 640, SPD_RAMP = 2.2;
+  const SENS = 3.1;          // parmak hareketi → karakter hareketi çarpanı
+  const DRAG_CAP = 2.1;      // parmakla otomatik hız tavanını aşabilme payı
+  const SNAP = 48;           // parmağa yapışma keskinliği
   const SLOW = 0.10;         // parmak kalkınca saniyede kalan hız
   const WALL_KEEP = 0.92, BOUNCE_LOCK = 0.13;
   const CHAIN_WIN = 0.65;
@@ -140,8 +142,9 @@
     if (p.lock === 0) {
       if (keyDir) { p.vx += (keyDir*spd - p.vx) * Math.min(1, dt*9); p.dir = keyDir; }
       else if (dragging) {
-        const want = Math.max(-spd, Math.min(spd, accum * SENS / Math.max(dt, 0.008)));
-        p.vx += (want - p.vx) * Math.min(1, dt*22);
+        const cap = spd * DRAG_CAP;
+        const want = Math.max(-cap, Math.min(cap, accum * SENS / Math.max(dt, 0.008)));
+        p.vx += (want - p.vx) * Math.min(1, dt*SNAP);
         if (Math.abs(p.vx) > 12) p.dir = p.vx > 0 ? 1 : -1;
       } else p.vx *= Math.pow(SLOW, dt);
     }
