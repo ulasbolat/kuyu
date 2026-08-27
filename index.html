@@ -19,7 +19,7 @@
   const WALL = 16, FLOOR_H = 88;
   const G0 = 2300;            // taban yerçekimi
   const JUMP_H = 2.95;        // zıplama yüksekliği, kat cinsinden (sabit)
-  const SPD_MIN = 330, SPD_RAMP = 0.95;
+  const SPD_MIN = 330, SPD_RAMP = 1.45;
   const SENS = 2.5;           // parmak → karakter çarpanı
   const DRAG_CAP = 1.9;       // taban hız tavanı çarpanı
   const RAMP_T = 0.62;        // aynı yöne bu kadar sürüklersen tam ivmeye çıkarsın
@@ -29,7 +29,7 @@
   const WALL_KEEP = 0.94;     // sekince hız bir miktar düşer (enerji birikmesin)
   const BOUNCE_LOCK = 0.16;   // sekme anında girdi kilidi
   const BOUNCE_FLY = 0.62;    // savrulma süresi: karşı duvara kadar gider
-  const SLOW_T = 1.7, HEAVY_T = 1.6;
+  const SLOW_T = 1.35, HEAVY_T = 1.6;
   const CHAIN_WIN = 0.65;
   const BOOST_VY = 2.02;
   const THEME_EVERY = 50;
@@ -40,13 +40,13 @@
   // pt: ortam parçacıkları — d yön (-1 yukarı, 1 aşağı), r yarıçap, v hız
   const THEMES = [
     { n:'KUYU',     a:'#0B0917', b:'#221B44', w:'#181330', wl:'#241C48', s:'#3C3563', st:'#6C61A6', ac:'#FFB454', bk:'#191338', pt:{c:'#5E5490',d:1,r:1.6,v:26}, hz:null },
-    { n:'ATEŞ',     a:'#1A0604', b:'#5A1508', w:'#2A0A06', wl:'#48120A', s:'#6B2411', st:'#C2542A', ac:'#FFD166', bk:'#3B0D06', pt:{c:'#FF8A3D',d:-1,r:2.0,v:52}, hz:{k:'kill',l:'fire',c:0.22,r:17} },
-    { n:'BUZ',      a:'#04121C', b:'#12456B', w:'#08202F', wl:'#123B54', s:'#1E5A7A', st:'#7FD6F0', ac:'#EAF9FF', bk:'#0B2E45', pt:{c:'#CFEEFB',d:1,r:1.8,v:38}, hz:{k:'slow',l:'snow',c:0.26,r:19} },
-    { n:'ORMAN',    a:'#050F09', b:'#12401F', w:'#0A1C11', wl:'#14301C', s:'#2C4A22', st:'#7CB342', ac:'#F0E68C', bk:'#0C2A15', pt:{c:'#9CCB5A',d:1,r:2.2,v:30}, hz:{k:'heavy',l:'vine',c:0.24,r:18} },
-    { n:'OKYANUS',  a:'#00121F', b:'#023A52', w:'#021D2B', wl:'#04364A', s:'#0B4F5C', st:'#3FBFA8', ac:'#FFE9A8', bk:'#032A3C', pt:{c:'#7FE8DA',d:-1,r:2.4,v:34}, hz:{k:'push',l:'akinti',c:0.26,r:21} },
-    { n:'GÖKDELEN', a:'#0A0C12', b:'#1C2436', w:'#12161F', wl:'#1E2836', s:'#2A3346', st:'#5F7392', ac:'#5AE0FF', bk:'#151B28', pt:{c:'#8FA6C4',d:1,r:1.4,v:120}, hz:{k:'kill',l:'bomba',c:0.20,r:15} },
-    { n:'ÇÖL',      a:'#1A1206', b:'#6B4A16', w:'#241A0A', wl:'#3E2C12', s:'#5C4420', st:'#D9AE5F', ac:'#FFF1C9', bk:'#3A2A10', pt:{c:'#E3C583',d:1,r:1.5,v:44}, hz:{k:'slow',l:'kum',c:0.26,r:20} },
-    { n:'UZAY',     a:'#03030B', b:'#160C2E', w:'#0A0818', wl:'#181038', s:'#2A1F52', st:'#8C6FE0', ac:'#FF7AC6', bk:'#0C0820', pt:{c:'#FFFFFF',d:-1,r:1.3,v:14}, hz:{k:'pull',l:'delik',c:0.18,r:23} },
+    { n:'ATEŞ',     a:'#1A0604', b:'#5A1508', w:'#2A0A06', wl:'#48120A', s:'#6B2411', st:'#C2542A', ac:'#FFD166', bk:'#3B0D06', pt:{c:'#FF8A3D',d:-1,r:2.0,v:52}, hz:{k:'kill',l:'fire',c:0.11,r:17} },
+    { n:'BUZ',      a:'#04121C', b:'#12456B', w:'#08202F', wl:'#123B54', s:'#1E5A7A', st:'#7FD6F0', ac:'#EAF9FF', bk:'#0B2E45', pt:{c:'#CFEEFB',d:1,r:1.8,v:38}, hz:{k:'slow',l:'snow',c:0.12,r:19} },
+    { n:'ORMAN',    a:'#050F09', b:'#12401F', w:'#0A1C11', wl:'#14301C', s:'#2C4A22', st:'#7CB342', ac:'#F0E68C', bk:'#0C2A15', pt:{c:'#9CCB5A',d:1,r:2.2,v:30}, hz:{k:'heavy',l:'vine',c:0.12,r:18} },
+    { n:'OKYANUS',  a:'#00121F', b:'#023A52', w:'#021D2B', wl:'#04364A', s:'#0B4F5C', st:'#3FBFA8', ac:'#FFE9A8', bk:'#032A3C', pt:{c:'#7FE8DA',d:-1,r:2.4,v:34}, hz:{k:'push',l:'akinti',c:0.12,r:21} },
+    { n:'GÖKDELEN', a:'#0A0C12', b:'#1C2436', w:'#12161F', wl:'#1E2836', s:'#2A3346', st:'#5F7392', ac:'#5AE0FF', bk:'#151B28', pt:{c:'#8FA6C4',d:1,r:1.4,v:120}, hz:{k:'kill',l:'bomba',c:0.10,r:15} },
+    { n:'ÇÖL',      a:'#1A1206', b:'#6B4A16', w:'#241A0A', wl:'#3E2C12', s:'#5C4420', st:'#D9AE5F', ac:'#FFF1C9', bk:'#3A2A10', pt:{c:'#E3C583',d:1,r:1.5,v:44}, hz:{k:'slow',l:'kum',c:0.12,r:20} },
+    { n:'UZAY',     a:'#03030B', b:'#160C2E', w:'#0A0818', wl:'#181038', s:'#2A1F52', st:'#8C6FE0', ac:'#FF7AC6', bk:'#0C0820', pt:{c:'#FFFFFF',d:-1,r:1.3,v:14}, hz:{k:'pull',l:'delik',c:0.09,r:23} },
   ];
 
   const cv = document.getElementById('c'), ctx = cv.getContext('2d');
@@ -69,7 +69,7 @@
     safeBot = Number.isFinite(b) ? b : 0;
   }
 
-  let lastTrap = -99;
+  let lastTrap = -99, lastOrb = -99;
   let p, plats, orbs, amb, camY, rise, score, best = 0, maxFloor, over, shake,
       pops, dust, t, side, heat, themeI, themeMix, themeFrom, banner;
 
@@ -78,7 +78,7 @@
           lock:0, fly:0, phase:0, slowT:0, heavyT:0, grace:false, pushT:0, pushDir:0,
           wallN:0, lastWall:-9, inv:0 };
     plats = [{ x:WALL, y:0, w:W-2*WALL, floor:0, type:'wide' }];
-    orbs = []; lastTrap = -99;
+    orbs = []; lastTrap = -99; lastOrb = -99;
     camY = -0.62*H; rise = 0; score = 0; maxFloor = 0; over = false;
     shake = 0; pops = []; dust = []; t = 0; side = 1; heat = 0;
     themeI = 0; themeMix = 1; themeFrom = 0; banner = 0;
@@ -117,7 +117,8 @@
                  haz, boost, broken:0 });
 
     const hz = THEMES[Math.floor(f / THEME_EVERY) % THEMES.length].hz;
-    if (hz && !rest && f > 6 && Math.random() < hz.c) {
+    if (hz && !rest && f > 6 && f - lastOrb >= 3 && Math.random() < hz.c) {
+      lastOrb = f;
       orbs.push({ bx: WALL + 34 + Math.random()*(W-2*WALL-68), y: -f*FLOOR_H - 46,
                   r: hz.r, k: hz.k, l: hz.l, ph: Math.random()*6, sw: 18 + Math.random()*26 });
     }
