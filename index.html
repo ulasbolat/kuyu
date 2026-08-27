@@ -26,7 +26,7 @@
   const RAMP_MAX = 0.85;      // ivme birikiminin getirdiği ek pay
   const SNAP = 38;
   const SLOW = 0.10;
-  const WALL_KEEP = 1.06;     // sekince hız artıyor
+  const WALL_KEEP = 0.94;     // sekince hız bir miktar düşer (enerji birikmesin)
   const BOUNCE_LOCK = 0.16;   // sekme anında girdi kilidi
   const BOUNCE_FLY = 0.62;    // savrulma süresi: karşı duvara kadar gider
   const SLOW_T = 1.7, HEAVY_T = 1.6;
@@ -75,7 +75,8 @@
 
   function reset(){
     p = { x:W/2, y:0, vx:0, vy:0, dir:1, takeoff:0, lastLand:0, chain:0, squash:1,
-          lock:0, fly:0, phase:0, slowT:0, heavyT:0, grace:false, pushT:0, pushDir:0 };
+          lock:0, fly:0, phase:0, slowT:0, heavyT:0, grace:false, pushT:0, pushDir:0,
+          wallN:0, lastWall:-9 };
     plats = [{ x:WALL, y:0, w:W-2*WALL, floor:0, type:'wide' }];
     orbs = []; lastTrap = -99;
     camY = -0.62*H; rise = 0; score = 0; maxFloor = 0; over = false;
@@ -185,7 +186,7 @@
     p.fly = Math.max(0, p.fly - dt);
 
     if (p.lock === 0) {
-      const grip = p.fly > 0 ? 0.35 : 1;              // savrulurken direksiyon ağırlaşır
+      const grip = p.fly > 0 ? 0.55 : 1;              // savrulurken direksiyon ağırlaşır
       if (keyDir) { p.vx += (keyDir*spd - p.vx) * Math.min(1, dt*12*grip); p.dir = keyDir; }
       else if (dragging) {
         const d = Math.sign(accum);
@@ -214,10 +215,21 @@
     if (p.x - 12 < WALL || p.x + 12 > W-WALL) {
       const left = p.x - 12 < WALL;
       p.x = left ? WALL+12 : W-WALL-12;
-      // sekince karşı duvara doğru fırlıyorsun: taban hız garantili
-      const out = Math.max(Math.abs(p.vx) * WALL_KEEP, spd * 1.25);
+
+      // arka arkaya sekişleri say: ping-pong kilidine girmesin
+      p.wallN = (t - p.lastWall < 1.0) ? p.wallN + 1 : 1;
+      p.lastWall = t;
+
+      // taban hız garantili, ama tavanı da var — her sekişte büyüyemez
+      let out = Math.max(Math.abs(p.vx) * WALL_KEEP, spd * 1.25);
+      out = Math.min(out, spd * 1.7);
+
+      if (p.wallN >= 3) {                    // üçüncü sekişte döngüyü kır
+        out *= 0.40; p.fly = 0; p.lock = 0.04; p.pushT = 0;
+      } else {
+        p.fly = BOUNCE_FLY; p.lock = BOUNCE_LOCK;
+      }
       p.vx = left ? out : -out;
-      p.lock = BOUNCE_LOCK; p.fly = BOUNCE_FLY;
       shake = Math.max(shake, Math.min(6, out/85));
       puff(p.x, p.y-18, 9, 150, theme().ac);
     }
