@@ -76,7 +76,7 @@
   function reset(){
     p = { x:W/2, y:0, vx:0, vy:0, dir:1, takeoff:0, lastLand:0, chain:0, squash:1,
           lock:0, fly:0, phase:0, slowT:0, heavyT:0, grace:false, pushT:0, pushDir:0,
-          wallN:0, lastWall:-9 };
+          wallN:0, lastWall:-9, inv:0 };
     plats = [{ x:WALL, y:0, w:W-2*WALL, floor:0, type:'wide' }];
     orbs = []; lastTrap = -99;
     camY = -0.62*H; rise = 0; score = 0; maxFloor = 0; over = false;
@@ -109,7 +109,7 @@
     // çatlak taşlar arasında en az 4 kat boşluk: üst üste gelip çıkışsız bırakmasın
     const trap  = !rest && f > 4 && f - lastTrap >= 4 && Math.random() < 0.11;
     if (trap) lastTrap = f;
-    const haz   = !rest && !trap && f > 12 && Math.random() < 0.17
+    const haz   = !rest && !trap && f > 12 && f < THEME_EVERY && Math.random() < 0.17
                   ? ['l','r','m'][(Math.random()*3)|0] : null;
     const boost = !rest && !trap && !haz && f > 18 && Math.random() < 0.075;
     plats.push({ x, y:-f*FLOOR_H, w, floor:f,
@@ -180,6 +180,7 @@
 
     heat = Math.max(0, heat - dt*0.40);
     p.slowT = Math.max(0, p.slowT - dt);
+    p.inv = Math.max(0, p.inv - dt);
     p.heavyT = Math.max(0, p.heavyT - dt);
     const spd = curSpeed(), gg = grav();
     p.lock = Math.max(0, p.lock - dt);
@@ -238,8 +239,8 @@
       for (const q of plats) {
         if (q.broken) continue;
         if (prevY <= q.y + 1 && p.y >= q.y && p.x + 11 > q.x && p.x - 11 < q.x + q.w) {
-          if (p.grace) {                              // fırlamadan sonraki ilk iniş bedava
-            p.grace = false;
+          if (p.grace || p.inv > 0) {                 // fırlamadan sonraki ilk iniş bedava
+            p.grace = false; p.inv = 0;
             p.y = q.y; land(q);
             p.vy = -Math.sqrt(2 * gg * JUMP_H * FLOOR_H);
             p.takeoff = q.floor; p.squash = 0.72;
@@ -287,15 +288,16 @@
           const of = Math.round(-(o.y + 46) / FLOOR_H);
           return of < tf - 2 || of > tf + 3;
         });
-        p.grace = true;
+        p.grace = true; p.inv = 3.2;
         pops.push({ x:W/2, y:p.y - 120, txt:'FIRLADIN', sub:'', life:1 });
         shake = Math.max(shake, 4);
         puff(bx, by, 16, 320, theme().ac);
       }
     }
 
-    // bölüm tehlikeleri
+    // bölüm tehlikeleri (fırlama sırasında dokunulmazsın)
     for (const o of orbs) {
+      if (p.inv > 0) break;
       const ox = orbX(o), dy = (p.y - 17) - o.y, dx = p.x - ox;
       const dist = Math.hypot(dx, dy);
       if (o.k === 'pull' && dist < o.r + 130) {           // kara delik uzaktan çeker
@@ -454,6 +456,12 @@
     ctx.fillStyle = 'rgba(0,0,0,.65)';
     ctx.fillRect(px - 5 + p.dir*4, py - h + 9, 3, 4);
     ctx.fillRect(px + 2 + p.dir*4, py - h + 9, 3, 4);
+    if (p.inv > 0) {                          // fırlama kalkanı
+      ctx.strokeStyle = ac; ctx.globalAlpha = 0.45 + Math.sin(t*16)*0.25;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(px, py - h/2, 24, 0, 7); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
     if (p.heavyT > 0) {                       // sarmaşık: ayağına dolanmış
       ctx.strokeStyle = '#7CB342'; ctx.lineWidth = 2.5;
       for (let i = 0; i < 3; i++) {
