@@ -34,19 +34,25 @@
   const BOOST_VY = 2.02;
   const THEME_EVERY = 50;
   const RAMP_FLOORS = 170;    // bu kata kadar zorluk tavana çıkar
+  const POS_OK = 0.62;        // ekranda "yetişiyorsun" sayılan konum
+  const POS_STOP = 0.88;      // bu konumun altında zemin tamamen durur
+  const DANGER_AT = 0.80;     // kameranın geri vermeye başladığı konum
+  const SLACK_MAX = 0.90;     // kameranın geri verebileceği toplam pay (ekran oranı)
+  const SLACK_BACK = 105;     // toparlayınca payın geri dolma hızı (px/sn)
+  const FREEZE_T = 2.0;       // üçlü zincirde zeminin donma süresi
 
   const PRAISE = ['GÜZEL','HARİKA','MÜKEMMEL','İNANILMAZ','EFSANE','DURDURULAMAZ'];
 
   // pt: ortam parçacıkları — d yön (-1 yukarı, 1 aşağı), r yarıçap, v hız
   const THEMES = [
     { n:'KUYU',     a:'#0B0917', b:'#221B44', w:'#181330', wl:'#241C48', s:'#3C3563', st:'#6C61A6', ac:'#FFB454', bk:'#191338', pt:{c:'#5E5490',d:1,r:1.6,v:26}, hz:null },
-    { n:'ATEŞ',     a:'#1A0604', b:'#5A1508', w:'#2A0A06', wl:'#48120A', s:'#6B2411', st:'#C2542A', ac:'#FFD166', bk:'#3B0D06', pt:{c:'#FF8A3D',d:-1,r:2.0,v:52}, hz:{k:'kill',l:'fire',c:0.11,r:17} },
-    { n:'BUZ',      a:'#04121C', b:'#12456B', w:'#08202F', wl:'#123B54', s:'#1E5A7A', st:'#7FD6F0', ac:'#EAF9FF', bk:'#0B2E45', pt:{c:'#CFEEFB',d:1,r:1.8,v:38}, hz:{k:'slow',l:'snow',c:0.12,r:19} },
-    { n:'ORMAN',    a:'#050F09', b:'#12401F', w:'#0A1C11', wl:'#14301C', s:'#2C4A22', st:'#7CB342', ac:'#F0E68C', bk:'#0C2A15', pt:{c:'#9CCB5A',d:1,r:2.2,v:30}, hz:{k:'heavy',l:'vine',c:0.12,r:18} },
-    { n:'OKYANUS',  a:'#00121F', b:'#023A52', w:'#021D2B', wl:'#04364A', s:'#0B4F5C', st:'#3FBFA8', ac:'#FFE9A8', bk:'#032A3C', pt:{c:'#7FE8DA',d:-1,r:2.4,v:34}, hz:{k:'push',l:'akinti',c:0.12,r:21} },
-    { n:'GÖKDELEN', a:'#0A0C12', b:'#1C2436', w:'#12161F', wl:'#1E2836', s:'#2A3346', st:'#5F7392', ac:'#5AE0FF', bk:'#151B28', pt:{c:'#8FA6C4',d:1,r:1.4,v:120}, hz:{k:'kill',l:'bomba',c:0.10,r:15} },
-    { n:'ÇÖL',      a:'#1A1206', b:'#6B4A16', w:'#241A0A', wl:'#3E2C12', s:'#5C4420', st:'#D9AE5F', ac:'#FFF1C9', bk:'#3A2A10', pt:{c:'#E3C583',d:1,r:1.5,v:44}, hz:{k:'slow',l:'kum',c:0.12,r:20} },
-    { n:'UZAY',     a:'#03030B', b:'#160C2E', w:'#0A0818', wl:'#181038', s:'#2A1F52', st:'#8C6FE0', ac:'#FF7AC6', bk:'#0C0820', pt:{c:'#FFFFFF',d:-1,r:1.3,v:14}, hz:{k:'pull',l:'delik',c:0.09,r:23} },
+    { n:'ATEŞ',     a:'#1A0604', b:'#5A1508', w:'#2A0A06', wl:'#48120A', s:'#6B2411', st:'#C2542A', ac:'#FFD166', bk:'#3B0D06', pt:{c:'#FF8A3D',d:-1,r:2.0,v:52}, hz:{k:'kill',l:'fire',c:0.15,r:17} },
+    { n:'BUZ',      a:'#04121C', b:'#12456B', w:'#08202F', wl:'#123B54', s:'#1E5A7A', st:'#7FD6F0', ac:'#EAF9FF', bk:'#0B2E45', pt:{c:'#CFEEFB',d:1,r:1.8,v:38}, hz:{k:'slow',l:'snow',c:0.16,r:19} },
+    { n:'ORMAN',    a:'#050F09', b:'#12401F', w:'#0A1C11', wl:'#14301C', s:'#2C4A22', st:'#7CB342', ac:'#F0E68C', bk:'#0C2A15', pt:{c:'#9CCB5A',d:1,r:2.2,v:30}, hz:{k:'heavy',l:'vine',c:0.16,r:18} },
+    { n:'OKYANUS',  a:'#00121F', b:'#023A52', w:'#021D2B', wl:'#04364A', s:'#0B4F5C', st:'#3FBFA8', ac:'#FFE9A8', bk:'#032A3C', pt:{c:'#7FE8DA',d:-1,r:2.4,v:34}, hz:{k:'push',l:'akinti',c:0.16,r:21} },
+    { n:'GÖKDELEN', a:'#0A0C12', b:'#1C2436', w:'#12161F', wl:'#1E2836', s:'#2A3346', st:'#5F7392', ac:'#5AE0FF', bk:'#151B28', pt:{c:'#8FA6C4',d:1,r:1.4,v:120}, hz:{k:'kill',l:'bomba',c:0.14,r:15} },
+    { n:'ÇÖL',      a:'#1A1206', b:'#6B4A16', w:'#241A0A', wl:'#3E2C12', s:'#5C4420', st:'#D9AE5F', ac:'#FFF1C9', bk:'#3A2A10', pt:{c:'#E3C583',d:1,r:1.5,v:44}, hz:{k:'slow',l:'kum',c:0.16,r:20} },
+    { n:'UZAY',     a:'#03030B', b:'#160C2E', w:'#0A0818', wl:'#181038', s:'#2A1F52', st:'#8C6FE0', ac:'#FF7AC6', bk:'#0C0820', pt:{c:'#FFFFFF',d:-1,r:1.3,v:14}, hz:{k:'pull',l:'delik',c:0.12,r:23} },
   ];
 
   const cv = document.getElementById('c'), ctx = cv.getContext('2d');
@@ -69,32 +75,43 @@
     safeBot = Number.isFinite(b) ? b : 0;
   }
 
-  let lastTrap = -99, lastOrb = -99;
-  let p, plats, orbs, amb, camY, rise, score, best = 0, maxFloor, over, shake,
-      pops, dust, t, side, heat, themeI, themeMix, themeFrom, banner;
+  let lastTrap = -99, lastOrb = -99, lastEmpty = -99, emptyRun = 0, topFloor = 0, topY = 0;
+  let p, plats, orbs, spears, amb, camY, rise, score, best = 0, maxFloor, over, shake,
+      pops, dust, t, side, heat, themeI, themeMix, themeFrom, banner, slack, freeze;
 
   function reset(){
     p = { x:W/2, y:0, vx:0, vy:0, dir:1, takeoff:0, lastLand:0, chain:0, squash:1,
           lock:0, fly:0, phase:0, slowT:0, heavyT:0, grace:false, pushT:0, pushDir:0,
-          wallN:0, lastWall:-9, inv:0 };
+          wallN:0, lastWall:-9, inv:0, top:0, climb:0 };
     plats = [{ x:WALL, y:0, w:W-2*WALL, floor:0, type:'wide' }];
-    orbs = []; lastTrap = -99; lastOrb = -99;
+    orbs = []; spears = []; lastTrap = -99; lastOrb = -99; lastEmpty = -99; emptyRun = 0; topFloor = 0; topY = 0;
     camY = -0.62*H; rise = 0; score = 0; maxFloor = 0; over = false;
     shake = 0; pops = []; dust = []; t = 0; side = 1; heat = 0;
-    themeI = 0; themeMix = 1; themeFrom = 0; banner = 0;
+    themeI = 0; themeMix = 1; themeFrom = 0; banner = 0; slack = 0; freeze = 0;
+    p.top = 0; p.climb = 0;
     amb = []; for (let i=0;i<44;i++) amb.push({ x:Math.random()*W, y:Math.random()*H, s:0.6+Math.random()*0.9 });
     grow();
   }
 
   // zorluk ölçeği: her şey buna bağlı, 0 → 1
-  function lvl(){ return Math.min(1, maxFloor / RAMP_FLOORS); }
+  function lvl(){ return Math.min(1, maxFloor / RAMP_FLOORS); }   // fizik için sınırlı
+  function tier(){ return Math.min(2.4, maxFloor / RAMP_FLOORS); } // zorluk için tavansıza yakın
+  const cl = (v,a,b) => Math.max(a, Math.min(b, v));
+  // güvenlik ağı yükseldikçe erir
+  function slackMax(){ return H * (0.90 - 0.55 * cl((tier()-0.8)/1.4, 0, 1)); }
+  function riseFrac(){
+    return Math.min(0.88, 0.18 + 0.52*lvl() + 0.17*Math.max(0, tier()-1));
+  }
+  // Zemin, kusursuz tırmanışın yalnızca bu kadarı hızında gelir.
+  // Tehdit değil, kamp kurmayı engelleyen bir zorlayıcı: sen 2-3 kat hızlı çıkıyorsun.
+  function riseFrac2(){ return 0.28 + 0.20*lvl(); }
   function grav(){
-    return G0 * (1 + lvl()*0.80) * (1 + heat*0.12) * (p && p.heavyT > 0 ? 1.75 : 1);
+    return G0 * (1 + lvl()*0.80 + 0.34*Math.max(0, tier()-1)) * (1 + heat*0.12) * (p && p.heavyT > 0 ? 1.75 : 1);
   }
   function curSpeed(){
     return SPD_MIN * (1 + lvl()*SPD_RAMP) * (1 + heat*0.22) * (p && p.slowT > 0 ? 0.45 : 1);
   }
-  function orbX(o){ return o.bx + Math.sin(t*1.3 + o.ph) * o.sw; }
+  function orbX(o){ return o.bx + Math.sin(t*(o.os || 1.3) + o.ph) * o.sw; }
   function jumpH(){ return JUMP_H * (1 + lvl()*0.16); }        // menzil de yükselsin
   function jumpVY(){ return Math.sqrt(2 * grav() * jumpH() * FLOOR_H); }
   // kusursuz oynayan birinin saniyede kaç piksel tırmandığı
@@ -105,45 +122,79 @@
   function theme(){ return THEMES[themeI % THEMES.length]; }
 
   function growOne(){
-    const f = plats[plats.length-1].floor + 1;
+    const f = ++topFloor; topY = -f*FLOOR_H;
+
+    // yükseldikçe katlar seyrekleşir; üst üste en fazla iki boşluk (menzil 3,4 kat)
+    const maxRun = tier() > 1.35 ? 2 : 1;
+    const ec = 0.44 * cl((tier()-0.25)/1.25, 0, 1);
+    if (f > 20 && emptyRun < maxRun && Math.random() < ec) {
+      emptyRun++; lastEmpty = f; return;
+    }
+    emptyRun = 0;
     const rest = f % 25 === 0;
-    let w = rest ? 190 : Math.max(76, 132 - f*0.14) + Math.random()*22;
+    const minW = 76 - 36*cl((tier()-0.7)/1.4, 0, 1);
+    let w = rest ? 190 : Math.max(minW, 132 - f*0.14) + Math.random()*22;
     let cx;
     if (rest) cx = W/2;
     else { side = -side;
       cx = side < 0 ? W*(0.17 + Math.random()*0.20) : W*(0.63 + Math.random()*0.20); }
-    const x = Math.max(WALL+8, Math.min(W-WALL-8-w, cx - w/2));
+    let x = Math.max(WALL+8, Math.min(W-WALL-8-w, cx - w/2));
     // çatlak taşlar arasında en az 4 kat boşluk: üst üste gelip çıkışsız bırakmasın
     const trap  = !rest && f > 4 && f - lastTrap >= 4 && Math.random() < 0.11;
     if (trap) lastTrap = f;
-    const haz   = !rest && !trap && f > 12 && f < THEME_EVERY && Math.random() < 0.17
+    const haz   = !rest && !trap && f > 12 && Math.random() < (f < THEME_EVERY ? 0.17 : 0.11)
                   ? ['l','r','m'][(Math.random()*3)|0] : null;
-    const boost = !rest && !trap && !haz && f > 18 && Math.random() < 0.075;
+    const boost = !rest && !trap && !haz && f > 18 && Math.random() < 0.048;
+    // tetikli zıpkın: küçük, görünür bir plaka — basarsan alttan fırlar
+    const plate = !rest && !trap && !haz && f > 38 && Math.random() < 0.13
+                  ? 0.26 + Math.random()*0.48 : 0;
+    // bir kez bastıktan sonra dağılan platform: durmaya izin vermez
+    const once = !rest && !trap && !boost && f > 80 &&
+                 Math.random() < 0.30*cl((tier()-0.45)/1.0, 0, 1);
+
+    // kayan platformlar: asıl zorluk kaynağı
+    let mv = 0, mvs = 0, mvp = 0;
+    if (!rest && f > 45 && Math.random() < 0.58*cl((tier()-0.25)/0.9, 0, 1)) {
+      const room = (W - 2*WALL - 16 - w) / 2;
+      mv = Math.min(room, 40 + Math.random()*60);
+      mvs = 1.0 + Math.random()*0.8 + tier()*0.45;
+      mvp = Math.random()*6;
+      x = Math.max(WALL+8+mv, Math.min(W-WALL-8-w-mv, x));
+    }
+
     plats.push({ x, y:-f*FLOOR_H, w, floor:f,
                  type: rest ? 'wide' : trap ? 'trap' : 'normal',
-                 haz, boost, broken:0 });
+                 haz, boost, once, plate, broken:0, mv, mvs, mvp });
 
     const hz = THEMES[Math.floor(f / THEME_EVERY) % THEMES.length].hz;
-    if (hz && !rest && f > 6 && f - lastOrb >= 3 && Math.random() < hz.c) {
+    if (hz && !rest && f > 6 && f - lastOrb >= 2 && Math.random() < hz.c * (1 + 0.8*cl(tier()-1, 0, 1.2)/1.2)) {
       lastOrb = f;
-      orbs.push({ bx: WALL + 34 + Math.random()*(W-2*WALL-68), y: -f*FLOOR_H - 46,
-                  r: hz.r, k: hz.k, l: hz.l, ph: Math.random()*6, sw: 18 + Math.random()*26 });
+      const amp = 82 + Math.random()*68;                 // sağdan sola geniş gezinti
+      const span = Math.max(10, W - 2*WALL - 52 - 2*amp);
+      orbs.push({ bx: WALL + 26 + amp + Math.random()*span, y: -f*FLOOR_H - 46,
+                  r: hz.r, k: hz.k, l: hz.l, ph: Math.random()*6,
+                  sw: amp, os: 0.55 + Math.random()*0.40 });
     }
   }
 
-  function ensureUpTo(f){ while (plats[plats.length-1].floor < f) growOne(); }
+  function ensureUpTo(f){ while (topFloor < f) growOne(); }
 
   function grow(){
-    while (plats[plats.length-1].y > camY - 500) growOne();
-    while (plats.length && plats[0].y - camY > H + 200) plats.shift();
-    while (orbs.length && orbs[0].y - camY > H + 200) orbs.shift();
+    while (topY > camY - 500) growOne();
+    while (plats.length && plats[0].y - camY > H + 420) plats.shift();
+    while (orbs.length && orbs[0].y - camY > H + 420) orbs.shift();
+    spears = spears.filter(sp => sp.y - camY < H + 420);
   }
+
+  function stoneOf(){ return THEMES[themeI % THEMES.length].st; }
+  function platX(q){ return q.mv ? q.x + Math.sin(t*q.mvs + q.mvp) * q.mv : q.x; }
 
   // dikenli bölgenin yatay aralığı
   function hazSpan(q){
-    if (q.haz === 'l') return [q.x, q.x + q.w*0.20];
-    if (q.haz === 'r') return [q.x + q.w*0.80, q.x + q.w];
-    return [q.x + q.w*0.41, q.x + q.w*0.59];
+    const bx = platX(q);
+    if (q.haz === 'l') return [bx, bx + q.w*0.20];
+    if (q.haz === 'r') return [bx + q.w*0.80, bx + q.w];
+    return [bx + q.w*0.41, bx + q.w*0.59];
   }
 
   // ---- girdi: parmakla kaydır ------------------------------------------
@@ -246,7 +297,8 @@
     if (p.vy > 0) {
       for (const q of plats) {
         if (q.broken) continue;
-        if (prevY <= q.y + 1 && p.y >= q.y && p.x + 11 > q.x && p.x - 11 < q.x + q.w) {
+        const qx = platX(q);
+        if (prevY <= q.y + 1 && p.y >= q.y && p.x + 11 > qx && p.x - 11 < qx + q.w) {
           if (p.grace || p.inv > 0) {                 // fırlamadan sonraki ilk iniş bedava
             p.grace = false; p.inv = 0;
             p.y = q.y; land(q);
@@ -259,6 +311,15 @@
             if (p.x > z0 - 2 && p.x < z1 + 2) {      // dikenlere bastın
               over = true; shake = 8;
               puff(p.x, p.y, 14, 260, '#D9DEE8');
+              break;
+            }
+          }
+          if (q.plate) {
+            const px2 = platX(q) + q.w*q.plate;
+            if (Math.abs(p.x - px2) < 13) {
+              spears.push({ x:px2, y:q.y, t0:t });
+              over = true; shake = 9;
+              puff(px2, q.y, 14, 240, '#D9DEE8');
               break;
             }
           }
@@ -278,7 +339,7 @@
 
     for (const q of plats) {
       if (!q.boost) continue;
-      const bx = q.x + q.w/2, by = q.y - 34;
+      const bx = platX(q) + q.w/2, by = q.y - 34;
       if (Math.abs(p.x - bx) < 24 && Math.abs(p.y - 17 - by) < 26) {
         q.boost = false;
         p.vy = -jumpVY() * BOOST_VY;
@@ -288,9 +349,15 @@
         ensureUpTo(tf + 3);
         for (const z of plats) {
           if (z.floor < tf - 2 || z.floor > tf + 3) continue;
-          z.haz = null; z.broken = 0;
+          z.haz = null; z.broken = 0; z.once = false; z.plate = 0;
           if (z.type === 'trap') z.type = 'normal';
-          if (z.floor >= tf - 1 && z.floor <= tf + 1) { z.w = 200; z.x = W/2 - 100; }
+          if (z.floor >= tf - 1 && z.floor <= tf + 1) { z.w = 200; z.x = W/2 - 100; z.mv = 0; }
+        }
+        if (!plats.some(z => z.floor === tf)) {          // o kat boşsa zemin yarat
+          const idx = plats.findIndex(z => z.floor > tf);
+          const np = { x:W/2-100, y:-tf*FLOOR_H, w:200, floor:tf, type:'wide',
+                       haz:null, boost:false, broken:0, mv:0, mvs:0, mvp:0 };
+          if (idx < 0) plats.push(np); else plats.splice(idx, 0, np);
         }
         orbs = orbs.filter(o => {
           const of = Math.round(-(o.y + 46) / FLOOR_H);
@@ -332,14 +399,16 @@
       }
     }
 
-    camY = Math.min(camY, p.y - 0.62*H);
+    camY = Math.min(camY, p.y - POS_OK*H);
+
+    freeze = Math.max(0, freeze - dt);
     if (maxFloor >= 5) {
-      // zemin hep tırmanma hızının altında kalır: hız artar ama seni geçemez
-      rise = climbRate() * (0.14 + lvl()*0.44) * (1 + heat*0.12);
+      rise = climbRate() * riseFrac2() * (1 - heat*0.25) * (freeze > 0 ? 0.40 : 1);
       camY -= rise * dt;
-    }
+    } else rise = 0;
+
     grow();
-    if (p.y - camY > H + 30) { over = true; shake = 6; }
+    if (p.y - camY > H + 60) { over = true; shake = 6; }
 
     const want = Math.floor(maxFloor / THEME_EVERY);
     if (want !== themeI) { themeFrom = themeI; themeI = want; themeMix = 0; banner = 2.6; }
@@ -370,9 +439,10 @@
     const gain = f - p.takeoff;
 
     // taşın ucundan sekersen hızlanırsın: risk alan ödüllenir
-    const edge = Math.min(p.x - q.x, q.x + q.w - p.x);
+    const qx = platX(q);
+    const edge = Math.min(p.x - qx, qx + q.w - p.x);
     if (edge < 14 && q.type !== 'wide') {
-      const out = p.x > q.x + q.w/2 ? 1 : -1;
+      const out = p.x > qx + q.w/2 ? 1 : -1;
       p.vx = out * Math.max(Math.abs(p.vx) * 1.45, curSpeed() * 1.3);
       p.fly = 0.45; heat = Math.min(1, heat + 0.14); score += 25;
       pops.push({ x:W/2, y:p.y - 96, txt:'KENAR', sub:'', life:0.75 });
@@ -386,6 +456,10 @@
       score += gain * gain * 6 * p.chain;
       const w = PRAISE[Math.min(PRAISE.length-1, gain - 2 + Math.floor(p.chain/3))];
       pops.push({ x:W/2, y:p.y - 120, txt:w, sub:p.chain > 1 ? 'x'+p.chain : '', life:1 });
+      if (p.chain >= 3 && freeze < FREEZE_T*0.5) {
+        freeze = FREEZE_T;
+        pops.push({ x:W/2, y:p.y - 165, txt:'ZEMİN YAVAŞLADI', sub:'', life:1 });
+      }
       shake = Math.max(shake, 1.4 + gain*0.35);
     } else {
       if (t - p.lastLand >= CHAIN_WIN) p.chain = 0;
@@ -510,25 +584,30 @@
 
     const stone = col('s'), stoneTop = col('st'), ac = col('ac');
     for (const q of plats) {
-      const y = q.y - camY;
+      const y = q.y - camY, qx = platX(q);
       if (y < -60 || y > H + 40) continue;
       if (q.broken) {
         const k = Math.min(1, (t - q.broken)*3);
         ctx.globalAlpha = 1 - k; ctx.fillStyle = '#7A5A3C';
-        round(q.x, y + k*40, q.w*0.45, 13, 4); ctx.fill();
-        round(q.x + q.w*0.55, y + k*52, q.w*0.45, 13, 4); ctx.fill();
+        round(qx, y + k*40, q.w*0.45, 13, 4); ctx.fill();
+        round(qx + q.w*0.55, y + k*52, q.w*0.45, 13, 4); ctx.fill();
         ctx.globalAlpha = 1; continue;
       }
       if (q.type === 'trap') {
-        ctx.fillStyle = '#6B5238'; round(q.x, y, q.w, 15, 5); ctx.fill();
+        ctx.fillStyle = '#6B5238'; round(qx, y, q.w, 15, 5); ctx.fill();
         ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.lineWidth = 1.5;
         for (let i = 1; i < 4; i++) {
-          const cx2 = q.x + q.w*i/4;
+          const cx2 = qx + q.w*i/4;
           ctx.beginPath(); ctx.moveTo(cx2-4, y); ctx.lineTo(cx2+3, y+14); ctx.stroke();
         }
+      } else if (q.once) {
+        ctx.strokeStyle = stoneTop; ctx.lineWidth = 2; ctx.setLineDash([7, 5]);
+        round(qx + 1, y + 1, q.w - 2, 13, 4); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = stoneTop; round(qx, y, q.w, 3.5, 2); ctx.fill();
       } else {
-        ctx.fillStyle = stone; round(q.x, y, q.w, 15, 5); ctx.fill();
-        ctx.fillStyle = stoneTop; round(q.x, y, q.w, 4, 2); ctx.fill();
+        ctx.fillStyle = stone; round(qx, y, q.w, 15, 5); ctx.fill();
+        ctx.fillStyle = stoneTop; round(qx, y, q.w, 4, 2); ctx.fill();
       }
       if (q.haz) {                                               // platform üstü dikenler
         const [z0, z1] = hazSpan(q), n = Math.max(2, Math.round((z1-z0)/9));
@@ -542,12 +621,27 @@
           ctx.lineTo(x0 + step2, y - 1.5); ctx.closePath(); ctx.fill();
         }
       }
+      if (q.plate) {                               // zıpkın plakası
+        const px2 = qx + q.w*q.plate;
+        ctx.fillStyle = '#1C2029';
+        round(px2 - 12, y - 1, 24, 6, 2); ctx.fill();
+        ctx.fillStyle = '#8E97A8';
+        for (let i = -1; i <= 1; i++) ctx.fillRect(px2 + i*7 - 1, y + 1, 2, 3);
+      }
+      if (q.mv) {                                  // kayan platform göstergesi
+        ctx.fillStyle = 'rgba(255,255,255,.30)';
+        const d2 = Math.cos(t*q.mvs + q.mvp) > 0 ? 1 : -1;
+        const ax = d2 > 0 ? qx + q.w + 7 : qx - 7;
+        ctx.beginPath(); ctx.moveTo(ax + d2*5, y + 7);
+        ctx.lineTo(ax - d2*3, y + 2); ctx.lineTo(ax - d2*3, y + 12);
+        ctx.closePath(); ctx.fill();
+      }
       if (q.floor % 25 === 0 && q.floor > 0) {
         ctx.fillStyle = ac; ctx.font = '700 12px ui-monospace,monospace';
-        ctx.textAlign = 'center'; ctx.fillText(q.floor, q.x + q.w/2, y + 12);
+        ctx.textAlign = 'center'; ctx.fillText(q.floor, qx + q.w/2, y + 12);
       }
       if (q.boost) {
-        const bx = q.x + q.w/2, by = y - 34 + Math.sin(t*4 + q.floor)*4;
+        const bx = qx + q.w/2, by = y - 34 + Math.sin(t*4 + q.floor)*4;
         ctx.save(); ctx.shadowColor = ac; ctx.shadowBlur = 20;
         ctx.fillStyle = ac; ctx.beginPath(); ctx.arc(bx, by, 11, 0, 7); ctx.fill();
         ctx.restore();
@@ -629,6 +723,18 @@
       ctx.restore();
     }
 
+    for (const sp of spears) {
+      const hgt = Math.min(150, (t - sp.t0) * 1100);
+      if (hgt <= 0) continue;
+      const y0 = sp.y - camY;
+      ctx.fillStyle = '#B9C0CE';
+      ctx.fillRect(sp.x - 4, y0 - hgt, 8, hgt);
+      ctx.fillStyle = '#EFF3F8';
+      ctx.beginPath(); ctx.moveTo(sp.x, y0 - hgt - 16);
+      ctx.lineTo(sp.x - 8, y0 - hgt + 4); ctx.lineTo(sp.x + 8, y0 - hgt + 4);
+      ctx.closePath(); ctx.fill();
+    }
+
     drawHero(p.x, p.y - camY, p.squash, ac);
 
     for (const q of pops) {
@@ -647,6 +753,12 @@
     ctx.fillStyle = 'rgba(255,255,255,.10)';
     round(WALL+14, barY, W-2*WALL-28, 8, 4); ctx.fill();
     ctx.fillStyle = ac; round(WALL+14, barY, (W-2*WALL-28)*heat, 8, 4); ctx.fill();
+    if (freeze > 0) {
+      ctx.globalAlpha = Math.min(1, freeze*2);
+      ctx.strokeStyle = ac; ctx.lineWidth = 3;
+      ctx.strokeRect(1.5, 1.5, W-3, H-3);
+      ctx.globalAlpha = 1;
+    }
 
     const hy = safeTop + 46;
     ctx.textAlign = 'left'; ctx.fillStyle = '#EDE9FF';
@@ -680,7 +792,7 @@
       ctx.fillText('parmağını sağa sola kaydır', W/2, H*0.40);
       ctx.fillText('dikenlere ve çatlak taşa basma', W/2, H*0.40 + 24);
       ctx.fillText('duvara çarparsan karşıya fırlarsın', W/2, H*0.40 + 48);
-      ctx.fillText('her bölümün kendi tehlikesi var', W/2, H*0.40 + 72);
+      ctx.fillText('asıl tehlike zemin değil, yanlış platform', W/2, H*0.40 + 72);
       ctx.globalAlpha = 1;
     }
     ctx.restore();
