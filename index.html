@@ -33,7 +33,7 @@
   const CHAIN_WIN = 0.65;
   const BOOST_VY = 2.02;
   const THEME_EVERY = 50;
-  const RAMP_FLOORS = 170;    // bu kata kadar zorluk tavana çıkar
+  const RAMP_FLOORS = 340;    // zorluk bu kata kadar yayılarak artar
   const POS_OK = 0.62;        // ekranda "yetişiyorsun" sayılan konum
   const POS_STOP = 0.88;      // bu konumun altında zemin tamamen durur
   const DANGER_AT = 0.80;     // kameranın geri vermeye başladığı konum
@@ -94,19 +94,16 @@
   }
 
   // zorluk ölçeği: her şey buna bağlı, 0 → 1
-  function lvl(){ return Math.min(1, maxFloor / RAMP_FLOORS); }   // fizik için sınırlı
-  function tier(){ return Math.min(2.4, maxFloor / RAMP_FLOORS); } // zorluk için tavansıza yakın
   const cl = (v,a,b) => Math.max(a, Math.min(b, v));
-  // güvenlik ağı yükseldikçe erir
-  function slackMax(){ return H * (0.90 - 0.55 * cl((tier()-0.8)/1.4, 0, 1)); }
-  function riseFrac(){
-    return Math.min(0.88, 0.18 + 0.52*lvl() + 0.17*Math.max(0, tier()-1));
-  }
+  // dif: 0 → 1 arası tek zorluk ölçeği; 340. katta tavan yapar
+  function dif(){ return Math.min(1, maxFloor / RAMP_FLOORS); }
+  function lvl(){ return dif(); }
+  // bir öğe, verilen kat aralığında 0'dan 1'e açılır
+  function ramp(a, b){ return cl((dif() - a) / (b - a), 0, 1); }
   // Zemin, kusursuz tırmanışın yalnızca bu kadarı hızında gelir.
-  // Tehdit değil, kamp kurmayı engelleyen bir zorlayıcı: sen 2-3 kat hızlı çıkıyorsun.
   function riseFrac2(){ return 0.28 + 0.20*lvl(); }
   function grav(){
-    return G0 * (1 + lvl()*0.80 + 0.34*Math.max(0, tier()-1)) * (1 + heat*0.12) * (p && p.heavyT > 0 ? 1.75 : 1);
+    return G0 * (1 + lvl()*0.72 + 0.30*ramp(0.62, 1)) * (1 + heat*0.12) * (p && p.heavyT > 0 ? 1.75 : 1);
   }
   function curSpeed(){
     return SPD_MIN * (1 + lvl()*SPD_RAMP) * (1 + heat*0.22) * (p && p.slowT > 0 ? 0.45 : 1);
@@ -125,14 +122,14 @@
     const f = ++topFloor; topY = -f*FLOOR_H;
 
     // yükseldikçe katlar seyrekleşir; üst üste en fazla iki boşluk (menzil 3,4 kat)
-    const maxRun = tier() > 1.35 ? 2 : 1;
-    const ec = 0.44 * cl((tier()-0.25)/1.25, 0, 1);
+    const maxRun = dif() > 0.62 ? 2 : 1;
+    const ec = 0.44 * ramp(0.10, 0.85);
     if (f > 20 && emptyRun < maxRun && Math.random() < ec) {
       emptyRun++; lastEmpty = f; return;
     }
     emptyRun = 0;
     const rest = f % 25 === 0;
-    const minW = 76 - 36*cl((tier()-0.7)/1.4, 0, 1);
+    const minW = 76 - 36*ramp(0.22, 0.90);
     let w = rest ? 190 : Math.max(minW, 132 - f*0.14) + Math.random()*22;
     let cx;
     if (rest) cx = W/2;
@@ -150,14 +147,14 @@
                   ? 0.26 + Math.random()*0.48 : 0;
     // bir kez bastıktan sonra dağılan platform: durmaya izin vermez
     const once = !rest && !trap && !boost && f > 80 &&
-                 Math.random() < 0.30*cl((tier()-0.45)/1.0, 0, 1);
+                 Math.random() < 0.30*ramp(0.28, 0.85);
 
     // kayan platformlar: asıl zorluk kaynağı
     let mv = 0, mvs = 0, mvp = 0;
-    if (!rest && f > 45 && Math.random() < 0.58*cl((tier()-0.25)/0.9, 0, 1)) {
+    if (!rest && f > 45 && Math.random() < 0.58*ramp(0.10, 0.65)) {
       const room = (W - 2*WALL - 16 - w) / 2;
       mv = Math.min(room, 40 + Math.random()*60);
-      mvs = 1.0 + Math.random()*0.8 + tier()*0.45;
+      mvs = 1.0 + Math.random()*0.8 + dif()*0.9;
       mvp = Math.random()*6;
       x = Math.max(WALL+8+mv, Math.min(W-WALL-8-w-mv, x));
     }
@@ -167,7 +164,7 @@
                  haz, boost, once, plate, broken:0, mv, mvs, mvp });
 
     const hz = THEMES[Math.floor(f / THEME_EVERY) % THEMES.length].hz;
-    if (hz && !rest && f > 6 && f - lastOrb >= 2 && Math.random() < hz.c * (1 + 0.8*cl(tier()-1, 0, 1.2)/1.2)) {
+    if (hz && !rest && f > 6 && f - lastOrb >= 2 && Math.random() < hz.c * (1 + 0.8*ramp(0.45, 1))) {
       lastOrb = f;
       const amp = 82 + Math.random()*68;                 // sağdan sola geniş gezinti
       const span = Math.max(10, W - 2*WALL - 52 - 2*amp);
