@@ -22,8 +22,8 @@
   const SPD_MIN = 330, SPD_RAMP = 1.45;
   const SENS = 2.5;           // parmak → karakter çarpanı
   const DRAG_CAP = 1.9;       // taban hız tavanı çarpanı
-  const RAMP_T = 0.62;        // aynı yöne bu kadar sürüklersen tam ivmeye çıkarsın
-  const RAMP_MAX = 0.85;      // ivme birikiminin getirdiği ek pay
+  const RAMP_T = 0.55;        // aynı yöne bu kadar sürüklersen tam ivmeye çıkarsın
+  const RAMP_MAX = 1.20;      // ivme birikiminin getirdiği ek pay
   const SNAP = 38;
   const SLOW = 0.10;
   const WALL_KEEP = 0.94;     // sekince hız bir miktar düşer (enerji birikmesin)
@@ -122,8 +122,8 @@
     const f = ++topFloor; topY = -f*FLOOR_H;
 
     // yükseldikçe katlar seyrekleşir; üst üste en fazla iki boşluk (menzil 3,4 kat)
-    const maxRun = dif() > 0.62 ? 2 : 1;
-    const ec = 0.44 * ramp(0.10, 0.85);
+    const maxRun = 1;                       // iki boşluk üst üste gelirse menzil yetmiyordu
+    const ec = 0.50 * ramp(0.10, 0.85);
     if (f > 20 && emptyRun < maxRun && Math.random() < ec) {
       emptyRun++; lastEmpty = f; return;
     }
@@ -136,15 +136,20 @@
     else { side = -side;
       cx = side < 0 ? W*(0.17 + Math.random()*0.20) : W*(0.63 + Math.random()*0.20); }
     let x = Math.max(WALL+8, Math.min(W-WALL-8-w, cx - w/2));
-    // çatlak taşlar arasında en az 4 kat boşluk: üst üste gelip çıkışsız bırakmasın
-    const trap  = !rest && f > 4 && f - lastTrap >= 4 && Math.random() < 0.11;
+    // çatlak taşın hemen altında sağlam bir zemin şart: düşünce tutunacak yer olsun
+    const below = plats[plats.length-1];
+    const safeBelow = below && below.floor === f-1 && !below.once &&
+                      (below.type === 'normal' || below.type === 'wide') && !below.haz;
+    const trap  = !rest && f > 4 && f - lastTrap >= 4 && safeBelow && Math.random() < 0.11;
     if (trap) lastTrap = f;
     const haz   = !rest && !trap && f > 12 && Math.random() < (f < THEME_EVERY ? 0.17 : 0.11)
-                  ? ['l','r','m'][(Math.random()*3)|0] : null;
+                  ? (Math.random() < 0.5 ? 'l' : 'r') : null;
     const boost = !rest && !trap && !haz && f > 18 && Math.random() < 0.048;
     // tetikli zıpkın: küçük, görünür bir plaka — basarsan alttan fırlar
-    const plate = !rest && !trap && !haz && f > 38 && Math.random() < 0.13
-                  ? 0.26 + Math.random()*0.48 : 0;
+    // zıpkın plakası: orman bölümünden itibaren, hep kenarda
+    const plate = !rest && !trap && !haz && f > THEME_EVERY*3 && Math.random() < 0.15
+                  ? (Math.random() < 0.5 ? 0.10 + Math.random()*0.10
+                                         : 0.80 + Math.random()*0.10) : 0;
     // bir kez bastıktan sonra dağılan platform: durmaya izin vermez
     const once = !rest && !trap && !boost && f > 80 &&
                  Math.random() < 0.30*ramp(0.28, 0.85);
